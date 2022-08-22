@@ -1,0 +1,69 @@
+
+#include <string>
+#include <ctime>
+#include <cstdlib>
+#include <cstdio>
+
+#include "lodepng.cpp"
+
+#include "HydroErosion.hpp"
+
+#include "File.hpp"
+
+int main(int argc, char ** argv) {
+	srand(time(NULL));
+	Grid grid;
+	
+	const char* str = argc > 1 ? argv[1] : "default";
+	
+	float* data = NULL;
+	unsigned width, height;
+// 	Load(&data, width, height, 0, 100, argv[1]);
+	width = height = 256;
+	
+	
+	printf("Loaded [%u x %u]\n", width, height);
+	grid.tiles = new Tile[width*height];
+	grid.width = width;
+	grid.height = height;
+	data = new float[width*height];
+// 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
+// 		grid.tiles[i].ground = data[i];
+	for(int x=0; x<width; ++x) {
+		for(int y=0; y<height; ++y) {
+			float X = x/100.0f;
+			float Y = y/100.0f;
+			grid.At<false>(x, y)->ground = sin(X) * sin(Y);
+		}
+	}
+	printf("Converted\n");
+	
+	long long beg = clock();
+	for(size_t I=0;; ++I) {
+		for(int i=0; i<width*10; ++i) {
+			grid.At<false>(rand()%grid.width, rand()%grid.height)->water += 0.01;
+		}
+		grid.At<false>(1330%width, 1850%height)->water += 0.1;
+		grid.FullCycle();
+		if(clock() - beg >= CLOCKS_PER_SEC*2) {
+			printf(" done: %li ...", I);
+			for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
+				data[i] = grid.tiles[i].ground;
+			Save(data, width, height,
+					(std::string(str)
+					 + "."
+					 + std::to_string(I)
+					 + ".eroded.png").c_str());
+			printf(" saved\n");
+			beg = clock();
+		}
+	}
+	
+	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
+		data[i] = grid.tiles[i].ground;
+	
+	Save(data, width, height, (std::string(str) + ".eroded.png").c_str());
+	delete[] data;
+	return 0;
+}
+
