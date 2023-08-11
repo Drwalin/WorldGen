@@ -19,10 +19,10 @@
 template<bool safe>
 inline Tile* Grid::At(int x, int y) const {
 	if constexpr(safe) {
-		if(x < 0)            return NULL;
-		else if(x >= width)  return NULL;
-		if(y < 0)            return NULL;
-		else if(y >= height) return NULL;
+		if(x < 0)            return At<true>(width-1, y);//NULL;
+		else if(x >= width)  return At<true>(0, y);//NULL;
+		if(y < 0)            return At<true>(x, height-1);//NULL;
+		else if(y >= height) return At<true>(x, 0);//NULL;
 	}
 	return (Tile*)(tiles + (x*height + y));
 }
@@ -63,7 +63,7 @@ inline void Grid::LimitFlux(Tile& src) {
 	float sum = src.f.L + src.f.B + src.f.R + src.f.T;
 	float water = src.d * l*l;
 	float outflux = sum * dt;
-	if(outflux <= water)
+	if(outflux <= water+0.000001)
 		return;
 	float K = water / outflux;
 	src.f.L *= K;
@@ -108,6 +108,11 @@ void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 	float water_level = src.d;
 	UpdateWaterLevel<safe>(src, neighs);
 	water_level = (water_level + src.d) * 0.5f;
+	if(water_level < 0.000001) {
+		src.vx = 0;
+		src.vy = 0;
+		return;
+	}
 	float dWx = 0.0f, dWy = 0.0f;
 	SAFE_COND_GRID(neighs[0], dWx += neighs[0]->f.R - src.f.L);
 	SAFE_COND_GRID(neighs[2], dWx -= neighs[2]->f.L - src.f.R);
