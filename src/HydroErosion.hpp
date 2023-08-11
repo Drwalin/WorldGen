@@ -6,12 +6,115 @@
 
 #include <cstdio>
 #include <cmath>
+#include <cinttypes>
 
 struct Flux {
 	float L;
 	float B;
 	float R;
 	float T;
+};
+
+struct FloatArray4 {
+	float v[4];
+};
+
+using TileId = int32_t;
+
+class HydroErosion {
+public:
+	
+	bool wrap;
+	
+	union {
+		float *b;
+		float *ground;
+	};
+	union {
+		float *water;
+		float *d;
+	};
+	union {
+		float *DV;
+	};
+	union {
+		float *sediment;
+		float *suspendedSediment;
+		float *s;
+	};
+	union {
+		float *hardness;
+		float *Ks;
+		float *dissolvingConstant;
+	};
+	union {
+		Flux *f;
+		FloatArray4 *fluxArray;
+	};
+	float *vx;
+	float *vy;
+	
+public:
+	
+	int width, height;
+	float dt;
+	union {
+		float A;
+		float crossSectionalAreaOfPipe;
+	};
+	union {
+		float g;
+		float gravity;
+	};
+	union {
+		float l;
+		float tileDimensionSize;
+	};
+	union {
+		float Kd;
+		float depositionConstant;
+	};
+	union {
+		float Kc;
+		float sedimentCapacityConstant;
+	};
+	float minimumSedimentCapacity;
+	
+public:
+	
+	template<bool safe>
+	TileId At(int x, int y) const;
+	template<bool safe, int dir>
+	TileId Neighbour(int x, int y) const;
+	template<bool safe>
+	TileId Neighbour(int x, int y, int dir) const;
+	
+	template<bool safe, int dir>
+	float CalcFluxInDirection(TileId src, TileId neigh) const;
+	void LimitFlux(TileId src);
+	template<bool safe>
+	void CalcOutflux(int x, int y); // 3.2.1
+	
+	template<bool safe>
+	void UpdateWaterLevel(int x, int y);
+	template<bool safe>
+	void UpdateWaterVelocity(int x, int y); // 3.2.2
+
+	
+	template<bool safe>
+	float SinusLocalTiltAngle(TileId t, int x, int y);
+	template<bool safe>
+	void ErosionAndDeposition(int x, int y); // 3.3
+	
+	template<bool safe>
+	void SedimentTransportation(int x, int y); // 3.4
+	
+	float EvaporationRate(int x, int y);
+	template<bool safe>
+	void Evaporation(int x, int y); // 3.5
+	
+	// to be executed after water increase
+	void FullCycle();
 };
 
 struct Tile {

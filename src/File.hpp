@@ -4,7 +4,7 @@
 
 #include "lodepng.h"
 
-void Save8(float* data, unsigned width, unsigned height, const char* filename) {
+inline void Save8(float* data, unsigned width, unsigned height, const char* filename) {
 	float min = data[0], max = data[0];
 	for(size_t i=0; i<(size_t)width*(size_t)height; ++i) {
 		if(min > data[i])
@@ -28,7 +28,7 @@ void Save8(float* data, unsigned width, unsigned height, const char* filename) {
 	delete[] image;
 }
 
-void Save(float* data, unsigned width, unsigned height, const char* filename) {
+inline void Save(float* data, unsigned width, unsigned height, const char* filename) {
 	float min = data[0], max = data[0];
 	for(size_t i=0; i<(size_t)width*(size_t)height; ++i) {
 		if(min > data[i])
@@ -53,7 +53,7 @@ void Save(float* data, unsigned width, unsigned height, const char* filename) {
 	delete[] image;
 }
 
-void Load(float** data, unsigned& width, unsigned &height, float min, float max,
+inline void Load(float** data, unsigned& width, unsigned &height, float min, float max,
 		const char* filename) {
 	unsigned char* image = NULL;
 	lodepng_decode_file(&image, &width, &width, filename, LCT_GREY, 16);
