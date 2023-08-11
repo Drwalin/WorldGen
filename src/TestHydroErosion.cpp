@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-#include "lodepng.cpp"
+#include "lodepng.h"
 
 #include "HydroErosion.hpp"
 
@@ -55,7 +55,7 @@ int main(int argc, char ** argv) {
 // 		}
 // 		grid.At<false>(1330%width, 1850%height)->water += 0.1;
 		grid.FullCycle();
-// 		if(clock() - beg >= CLOCKS_PER_SEC*2) {
+		if(clock() - beg >= CLOCKS_PER_SEC*2) {
 			printf(" done: %li ...", I);
 			for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
 				data[i] = grid.tiles[i].ground;
@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {
 					 + ".eroding.png").c_str());
 			printf(" saved\n");
 			beg = clock();
-// 		}
+		}
 	}
 	
 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)

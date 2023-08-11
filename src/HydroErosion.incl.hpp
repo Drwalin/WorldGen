@@ -73,7 +73,7 @@ inline void Grid::LimitFlux(Tile& src) {
 }
 
 template<bool safe>
-void Grid::CalcOutflux(int x, int y) {
+inline void Grid::CalcOutflux(int x, int y) {
 	Tile& src = *At<false>(x, y);
 	Tile* neighs[4] = {
 		Neighbour<safe, 0>(x, y),
@@ -88,7 +88,7 @@ void Grid::CalcOutflux(int x, int y) {
 }
 
 template<bool safe>
-void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
+inline void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
 	float fs = 0;
 	SAFE_COND_GRID(neighs[0], fs += neighs[0]->f.R - src.f.L);
 	SAFE_COND_GRID(neighs[1], fs += neighs[1]->f.L - src.f.R);
@@ -98,7 +98,7 @@ void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
 }
 
 template<bool safe>
-void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
+inline void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 	Tile& src = *At<false>(x, y);
 	Tile* neighs[4] = {
 		Neighbour<safe, 0>(x, y),
