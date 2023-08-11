@@ -58,8 +58,8 @@ struct Grid {
 		gravity = 9.81;
 		tileDimensionSize = 1;
 		
-		depositionConstant = 0.01;
-		sedimentCapacityConstant = 0.5;
+		depositionConstant = 1;//0.01;
+		sedimentCapacityConstant = 1;//0.5;
 		minimumSedimentCapacity = 0.1;
 	}
 	~Grid() {
