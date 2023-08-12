@@ -12,7 +12,8 @@
 
 int main(int argc, char ** argv) {
 	srand(time(NULL));
-	Grid grid;
+	HydroErosion grid(256, 256);
+// 	Grid grid;
 	
 	char str[1024];
 	sprintf(str, "images/%s", argc > 1 ? argv[1] : "default");
@@ -24,9 +25,6 @@ int main(int argc, char ** argv) {
 	
 	
 	printf("Loaded [%u x %u]\n", width, height);
-	grid.tiles = new Tile[width*height];
-	grid.width = width;
-	grid.height = height;
 	data = new float[width*height];
 // 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
 // 		grid.tiles[i].ground = data[i];
@@ -34,20 +32,20 @@ int main(int argc, char ** argv) {
 		for(int y=0; y<height; ++y) {
 			float X = x/30.0f;
 			float Y = y/30.0f;
-			grid.At<false>(x, y)->ground = sin(X) * sin(Y)*100;
+			grid.ground[grid.At<false>(x, y)] = sin(X) * sin(Y)*100;
 		}
 	}
 	printf("Converted\n");
 	
 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
-		data[i] = grid.tiles[i].ground;
+		data[i] = grid.ground[i];
 	Save(data, width, height, "Generated.png");
 	
 	long long beg = clock();
 	for(size_t I=0;; ++I) {
 		for(int x=0; x<width; ++x) {
 			for(int y=0; y<height; ++y) {
-				grid.At<false>(x, y)->water += 0.01;
+				grid.water[grid.At<false>(x, y)] += 0.01;
 			}
 		}
 // 		for(int i=0; i<width*10; ++i) {
@@ -58,7 +56,7 @@ int main(int argc, char ** argv) {
 		if(clock() - beg >= CLOCKS_PER_SEC*2) {
 			printf(" done: %li ...", I);
 			for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
-				data[i] = grid.tiles[i].ground;
+				data[i] = grid.ground[i];
 			Save(data, width, height,
 					(std::string(str)
 					 + "."
@@ -70,7 +68,7 @@ int main(int argc, char ** argv) {
 	}
 	
 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
-		data[i] = grid.tiles[i].ground;
+		data[i] = grid.ground[i];
 	
 	Save(data, width, height, (std::string(str) + ".eroded.png").c_str());
 	delete[] data;
