@@ -10,9 +10,9 @@
 
 struct Flux {
 	float L;
-	float B;
-	float R;
 	float T;
+	float R;
+	float B;
 };
 
 struct FloatArray4 {
@@ -41,11 +41,6 @@ public:
 		float *newSediment;
 	};
 	union {
-		float *softness;
-		float *Ks;
-		float *dissolvingConstant;
-	};
-	union {
 		Flux *f;
 		FloatArray4 *fluxArray;
 	};
@@ -58,6 +53,11 @@ public:
 	
 	const int width, height;
 	float dt;
+	union {
+		float softness;
+		float Ks;
+		float dissolvingConstant;
+	};
 	union {
 		float A;
 		float crossSectionalAreaOfPipe;
@@ -80,13 +80,12 @@ public:
 	};
 	float minimumSedimentCapacity;
 	
-	HydroErosion(int width, int height) : width(width), height(height) {
-		wrap = true;
+	HydroErosion(int width, int height, float l) : width(width), height(height), l(l) {
+		wrap = false;//true;
 		dt = 0.02;
-		l = 0.1;
 		A = l*l;
 		g = 9.81;
-		Kd = 0.01;
+		Kd = 0.1;
 		Kc = 0.5;
 		minimumSedimentCapacity = 0.1;
 		
@@ -94,7 +93,7 @@ public:
 		water = new float[width*height];
 		suspendedSediment = new float[width*height];
 		newSediment = new float[width*height];
-		dissolvingConstant = new float[width*height];
+		Ks = 0.1;
 		f = new Flux[width*height];
 		vx = new float[width*height];
 		vy = new float[width*height];
@@ -102,7 +101,6 @@ public:
 			ground[i] = 0;
 			water[i] = 0;
 			suspendedSediment[i] = 0;
-			dissolvingConstant[i] = 0.5;
 			vx[i] = 0;
 			vy[i] = 0;
 		}
@@ -113,7 +111,6 @@ public:
 		delete water;
 		delete suspendedSediment;
 		delete newSediment;
-		delete dissolvingConstant;
 		delete f;
 		delete vx;
 		delete vy;
@@ -145,6 +142,8 @@ public:
 	
 	template<bool safe>
 	void SedimentTransportation(int x, int y); // 3.4
+	template<bool safe>
+	void SedimentTransportationUpdateWhatsLeft(int x, int y); // 3.4
 	
 	float EvaporationRate(int x, int y);
 	template<bool safe>

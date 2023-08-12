@@ -53,7 +53,7 @@ TileId HydroErosion::Neighbour(int x, int y, int dir) const {
 template<bool safe, int dir>
 float HydroErosion::CalcFluxInDirection(TileId src, TileId neigh) const {
 	const float f_old = fluxArray[src].v[dir];
-	const float dh = b[src] + d[src] - b[neigh] - d[neigh];
+	const float dh = b[src] + s[src] + d[src] - b[neigh] - s[neigh] - d[neigh];
 	return std::max<float>(
 			0,
 			f_old + dt * A * g * dh / l
@@ -64,8 +64,16 @@ void HydroErosion::LimitFlux(TileId src) {
 	float sum = f[src].L + f[src].B + f[src].R + f[src].T;
 	float water = d[src] * A;
 	float outflux = sum * dt;
-	if(outflux <= water+0.000001 || outflux <= 0.000001)
+	if(outflux < 0.0000001) {
+		f[src].L = 0;
+		f[src].B = 0;
+		f[src].R = 0;
+		f[src].T = 0;
 		return;
+	}
+	if(outflux-0.0000001 < water) {
+		return;
+	}
 	float K = water / outflux;
 	f[src].L *= K;
 	f[src].B *= K;
@@ -105,15 +113,21 @@ void HydroErosion::UpdateWaterLevelAndVelocity(int x, int y) {
 	
 	float dWx=0, dWy=0;
 	float lx=0, ly=0;
-	SAFE_COND_GRID(neighs[0]>=0, (lx += l, dWx += f[neighs[0]].R - f[src].L));
-	SAFE_COND_GRID(neighs[2]>=0, (lx += l, dWx += f[neighs[2]].T - f[src].B));
-	SAFE_COND_GRID(neighs[1]>=0, (ly += l, dWy += f[neighs[1]].L - f[src].R));
-	SAFE_COND_GRID(neighs[3]>=0, (ly += l, dWy += f[neighs[3]].B - f[src].T));
+	SAFE_COND_GRID(neighs[0]>=0, (lx += l, dWx += fluxArray[neighs[0]].v[2] - fluxArray[src].v[0]));
+	SAFE_COND_GRID(neighs[2]>=0, (lx += l, dWx += fluxArray[neighs[2]].v[0] - fluxArray[src].v[2]));
+	SAFE_COND_GRID(neighs[1]>=0, (ly += l, dWy += fluxArray[neighs[1]].v[3] - fluxArray[src].v[1]));
+	SAFE_COND_GRID(neighs[3]>=0, (ly += l, dWy += fluxArray[neighs[3]].v[1] - fluxArray[src].v[3]));
 	const float fs = dWx + dWy;
-	const float DV_A = fs*dt/A;
+	const float DV_A = fs*dt/(lx*ly);
 	d[src] += DV_A;
 	float d_ = d[src] - DV_A*0.5f;
-	vx[src] = dWx / (ly * d_);
+	if(d_ < 0.000001) {
+		vx[src] = 0;
+		vy[src] = 0;
+		return;
+	}
+	vx[src] = dWx / (lx * d_);
+	vy[src] = dWy / (ly * d_);
 }
 
 
@@ -136,10 +150,10 @@ float HydroErosion::SinusLocalTiltAngle(TileId src, int x, int y) const {
 	float xaz, xbz, yaz, ybz;
 	xaz = xbz = yaz = ybz = d[src];
 	
-	SAFE_COND_GRID(neighs[0]>=0, (vax += l, xaz = d[neighs[0]]));
-	SAFE_COND_GRID(neighs[2]>=0, (vax += l, xbz = d[neighs[2]]));
-	SAFE_COND_GRID(neighs[1]>=0, (vby += l, yaz = d[neighs[1]]));
-	SAFE_COND_GRID(neighs[3]>=0, (vby += l, ybz = d[neighs[3]]));
+	SAFE_COND_GRID(neighs[0]>=0, (vax += l, xaz = b[neighs[0]]));
+	SAFE_COND_GRID(neighs[2]>=0, (vax += l, xbz = b[neighs[2]]));
+	SAFE_COND_GRID(neighs[1]>=0, (vby += l, yaz = b[neighs[1]]));
+	SAFE_COND_GRID(neighs[3]>=0, (vby += l, ybz = b[neighs[3]]));
 	
 	vaz = xbz - xaz;
 	vbz = ybz - yaz;
@@ -166,18 +180,19 @@ float HydroErosion::SinusLocalTiltAngle(TileId src, int x, int y) const {
 	const float ty = nx*1.f - nz*0.f;
 	const float tz = ny*0.f - nx*0.f;
 	
-	return sqrt(tx*tx + ty*ty + tz*tz);
+	float ret = sqrt(tx*tx + ty*ty + tz*tz);
+	return ret;
 }
 
 // 3.3
 template<bool safe>
 void HydroErosion::ErosionAndDeposition(int x, int y) {
 	TileId src = At<false>(x, y);
-	float sin_tilt = std::max<float>(SinusLocalTiltAngle<safe>(src, x, y), 0.1f);
-	float C = Kc * sin_tilt * sqrt(vx[src]*vx[src] + vy[src]*vy[src]);
+	const float sin_tilt = std::max<float>(SinusLocalTiltAngle<safe>(src, x, y), 0.1f);
+	const float C = Kc * sin_tilt * sqrt(vx[src]*vx[src] + vy[src]*vy[src]);
 	
 	if(C > s[src]) { // deposit sediment to ground
-		const float amount = Ks[src] * (C - s[src]);
+		const float amount = Ks * (C - s[src]);
 		b[src] -= amount;
 		s[src] += amount;
 	} else { // pick up soil from ground into deposit
@@ -226,23 +241,34 @@ void HydroErosion::SedimentTransportation(int x, int y) {
 			a01 = a00;
 		}
 		
-		if((a00|a01|a10|a11) < 0) {
+		if(a00 < 0 || a01 < 0 || a10 < 0 || a11 < 0) {
 			newSediment[dst] = 0;
 			return;
 		}
 	}
 	
-	const float rx = sx - SX;
-	const float ry = sy - SY;
+	const float rx = sx - (float)SX;
+	const float ry = sy - (float)SY;
 	
 	float ds00 = s[a00] * (1-rx) * (1-ry);
 	float ds10 = s[a10] * (rx) * (1-ry);
 	float ds01 = s[a01] * (1-rx) * (ry);
 	float ds11 = s[a11] * (rx) * (ry);
 	
+	s[a00] -= ds00;
+	s[a10] -= ds10;
+	s[a01] -= ds01;
+	s[a11] -= ds11;
+	
 	newSediment[dst] += ds00 + ds10 + ds01 + ds11;
 }
 
+template<bool safe>
+void HydroErosion::SedimentTransportationUpdateWhatsLeft(int x, int y) {
+	TileId src = At<false>(x, y);
+	s[src] += newSediment[src];
+	newSediment[src] = 0;
+}
 
 
 
@@ -281,25 +307,48 @@ void HydroErosion::Evaporation(int x, int y) {
 		} \
 	}
 
-HydroErosion* hh;
-template<bool s>
-void func(int x, int y) {
-	hh->newSediment[hh->At<s>(x, y)] += 1;
-}
 // to be executed after water increase
 void HydroErosion::FullCycle() {
-// 	for(int i=0; i<width*height; ++i) {
-// 		newSediment[i] = 0;
-// 	}
+	struct three {
+		float water;
+		float sediment;
+		float ground;
+	};
+	auto SumWater = [this](){
+		float sumWater = 0;
+		for(int i=0; i<width*height; ++i) {
+			sumWater += water[i];
+		}
+		float sumGround = 0;
+		for(int i=0; i<width*height; ++i) {
+			sumGround += ground[i];
+		}
+		float sumSed = 0;
+		for(int i=0; i<width*height; ++i) {
+			sumSed += s[i];
+		}
+		return three{sumWater, sumSed, sumGround};
+	};
 	
-	ErosionAndDeposition<false>(0,0);
-	ErosionAndDeposition<true>(0,0);
+	auto PrintWater = [&]() {
+		auto w = SumWater();
+// 		printf("water = %f  %f  %f   + %f\n", w.water, w.sediment, w.ground, w.sediment+w.ground);
+	};
+		
+	
+// 	printf("\n\n");
+	PrintWater();
  	FOR_EACH_SAFE_BORDERS(1, CalcOutflux);
+	PrintWater();
  	FOR_EACH_SAFE_BORDERS(1, UpdateWaterLevelAndVelocity);
+	PrintWater();
  	FOR_EACH_SAFE_BORDERS(1, ErosionAndDeposition);
+	PrintWater();
  	FOR_EACH_SAFE_BORDERS(0, SedimentTransportation);
+ 	FOR_EACH_SAFE_BORDERS(0, SedimentTransportationUpdateWhatsLeft);
+	PrintWater();
 	
-	std::swap(newSediment, sediment);
+// 	std::swap(newSediment, sediment);
 	
  	FOR_EACH_SAFE_BORDERS(0, Evaporation);
 }
