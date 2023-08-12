@@ -24,8 +24,6 @@ using TileId = int32_t;
 class HydroErosion {
 public:
 	
-	bool wrap;
-	
 	union {
 		float *b;
 		float *ground;
@@ -35,15 +33,15 @@ public:
 		float *d;
 	};
 	union {
-		float *DV;
-	};
-	union {
 		float *sediment;
 		float *suspendedSediment;
 		float *s;
 	};
 	union {
-		float *hardness;
+		float *newSediment;
+	};
+	union {
+		float *softness;
 		float *Ks;
 		float *dissolvingConstant;
 	};
@@ -56,7 +54,9 @@ public:
 	
 public:
 	
-	int width, height;
+	bool wrap;
+	
+	const int width, height;
 	float dt;
 	union {
 		float A;
@@ -80,6 +80,45 @@ public:
 	};
 	float minimumSedimentCapacity;
 	
+	HydroErosion(int width, int height) : width(width), height(height) {
+		wrap = true;
+		dt = 0.02;
+		l = 0.1;
+		A = l*l;
+		g = 9.81;
+		Kd = 0.01;
+		Kc = 0.5;
+		minimumSedimentCapacity = 0.1;
+		
+		ground = new float[width*height];
+		water = new float[width*height];
+		suspendedSediment = new float[width*height];
+		newSediment = new float[width*height];
+		dissolvingConstant = new float[width*height];
+		f = new Flux[width*height];
+		vx = new float[width*height];
+		vy = new float[width*height];
+		for(int i=0; i<width*height; ++i) {
+			ground[i] = 0;
+			water[i] = 0;
+			suspendedSediment[i] = 0;
+			dissolvingConstant[i] = 0.5;
+			vx[i] = 0;
+			vy[i] = 0;
+		}
+	}
+	
+	~HydroErosion() {
+		delete ground;
+		delete water;
+		delete suspendedSediment;
+		delete newSediment;
+		delete dissolvingConstant;
+		delete f;
+		delete vx;
+		delete vy;
+	}
+	
 public:
 	
 	template<bool safe>
@@ -96,13 +135,11 @@ public:
 	void CalcOutflux(int x, int y); // 3.2.1
 	
 	template<bool safe>
-	void UpdateWaterLevel(int x, int y);
-	template<bool safe>
-	void UpdateWaterVelocity(int x, int y); // 3.2.2
+	void UpdateWaterLevelAndVelocity(int x, int y); // 3.2.2
 
 	
 	template<bool safe>
-	float SinusLocalTiltAngle(TileId t, int x, int y);
+	float SinusLocalTiltAngle(TileId t, int x, int y) const;
 	template<bool safe>
 	void ErosionAndDeposition(int x, int y); // 3.3
 	

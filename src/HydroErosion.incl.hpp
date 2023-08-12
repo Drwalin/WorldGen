@@ -248,6 +248,8 @@ inline void Grid::FullCycle() {
  	FOR_EACH_SAFE_BORDERS(1, Evaporation);
 }
 
+#undef FOR_EACH_SAFE_BORDERS
+
 #undef SAFE_COND_GRID
 
 #endif
