@@ -6,6 +6,9 @@
 
 #include "HydroErosion.hpp"
 
+#include <cstdio>
+#define DEBUG if(false){printf("%s:%i\n", __FILE__, __LINE__); fflush(stdout);}
+
 
 #define SAFE_COND_GRID(COND, EXPR) \
 	if constexpr (safe) { \
@@ -65,6 +68,8 @@ inline void Grid::LimitFlux(Tile& src) {
 	float outflux = sum * dt;
 	if(outflux <= water)
 		return;
+	if(fabs(outflux) < 0.0001)
+		return;
 	float K = water / outflux;
 	src.f.L *= K;
 	src.f.B *= K;
@@ -74,16 +79,16 @@ inline void Grid::LimitFlux(Tile& src) {
 
 template<bool safe>
 void Grid::CalcOutflux(int x, int y) {
-	Tile& src = *At<false>(x, y);
+	Tile& src = *At<safe>(x, y);
 	Tile* neighs[4] = {
 		Neighbour<safe, 0>(x, y),
 		Neighbour<safe, 1>(x, y),
 		Neighbour<safe, 2>(x, y),
 		Neighbour<safe, 3>(x, y) };
-	SAFE_COND_GRID(true, (src.fluxArray[0] = CalcFluxInDirection<safe, 0>(src, *(neighs[0]))));
-	SAFE_COND_GRID(true, (src.fluxArray[1] = CalcFluxInDirection<safe, 1>(src, *(neighs[1]))));
-	SAFE_COND_GRID(true, (src.fluxArray[2] = CalcFluxInDirection<safe, 2>(src, *(neighs[2]))));
-	SAFE_COND_GRID(true, (src.fluxArray[3] = CalcFluxInDirection<safe, 3>(src, *(neighs[3]))));
+	SAFE_COND_GRID(safe, (src.fluxArray[0] = CalcFluxInDirection<safe, 0>(src, *(neighs[0]))));
+	SAFE_COND_GRID(safe, (src.fluxArray[1] = CalcFluxInDirection<safe, 1>(src, *(neighs[1]))));
+	SAFE_COND_GRID(safe, (src.fluxArray[2] = CalcFluxInDirection<safe, 2>(src, *(neighs[2]))));
+	SAFE_COND_GRID(safe, (src.fluxArray[3] = CalcFluxInDirection<safe, 3>(src, *(neighs[3]))));
 	LimitFlux(src);
 }
 
@@ -113,6 +118,8 @@ void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 	SAFE_COND_GRID(neighs[2], dWx -= neighs[2]->f.L - src.f.R);
 	SAFE_COND_GRID(neighs[1], dWy += neighs[1]->f.T - src.f.B);
 	SAFE_COND_GRID(neighs[3], dWy -= neighs[3]->f.B - src.f.T);
+	if(fabs(water_level) < 0.00001)
+		water_level =      0.00001;
 	src.vx = dWx / (water_level * l);
 	src.vy = dWy / (water_level * l);
 }
@@ -134,6 +141,10 @@ inline float Grid::SinusLocalTiltAngle(Tile& t, int x, int y) {
 	} else {
 		xl = yl = l;
 	}
+	if(fabs(xl) < 0.00001)
+		xl = (xl<0.0?-0.00001:0.00001);
+	if(fabs(yl) < 0.00001)
+		yl = (yl<0.0?-0.00001:0.00001);
 	
 	float dhdx = (neighs[0]->b - neighs[2]->b) / xl;
 	float dhdy = (neighs[1]->b - neighs[3]->b) / yl;
@@ -148,7 +159,7 @@ inline float Grid::SinusLocalTiltAngle(Tile& t, int x, int y) {
 
 template<bool safe>
 inline void Grid::ErosionAndDeposition(int x, int y) {
-	Tile& src = *At<false>(x, y);
+	Tile& src = *At<safe>(x, y);
 	float sinusLocalTiltAngle = SinusLocalTiltAngle<safe>(src, x, y);
 	float C = Kc * sinusLocalTiltAngle * sqrt(src.vx*src.vx + src.vy*src.vy);
 	if(C < minimumSedimentCapacity)
@@ -168,7 +179,7 @@ inline void Grid::ErosionAndDeposition(int x, int y) {
 
 template<bool safe>
 inline void Grid::SedimentTransportation(int x, int y) {
-	Tile& src = *At<false>(x, y);
+	Tile& src = *At<safe>(x, y);
 	float sx, sy;
 	sx = (x - src.vx*dt)/l;
 	sy = (y - src.vy*dt)/l;
@@ -185,10 +196,10 @@ inline void Grid::SedimentTransportation(int x, int y) {
 	if(SY+1 >= height)
 		return;
 	
-	Tile& a00 = *At<false>(SX, SY);
-	Tile& a10 = *At<false>(SX+1, SY);
-	Tile& a11 = *At<false>(SX+1, SY+1);
-	Tile& a01 = *At<false>(SX, SY+1);
+	Tile& a00 = *At<safe>(SX, SY);
+	Tile& a10 = *At<safe>(SX+1, SY);
+	Tile& a11 = *At<safe>(SX+1, SY+1);
+	Tile& a01 = *At<safe>(SX, SY+1);
 	
 	float rx = sx - SX;
 	float ry = sy - SY;
@@ -207,7 +218,7 @@ inline void Grid::SedimentTransportation(int x, int y) {
 }
 
 inline float Grid::EvaporationRate(int x, int y) {
-	return 0.01; // Make it dependent on temperature in place (x,y)
+	return 0.001; // Make it dependent on temperature in place (x,y)
 }
 
 template<bool safe>
@@ -217,30 +228,41 @@ inline void Grid::Evaporation(int x, int y) {
 }
 
 #define FOR_EACH_SAFE_BORDERS(BORDER, FUNC) \
+	DEBUG \
 	for(int x=BORDER; x<width-BORDER; ++x) { \
-		for(int y=1; y<height-1; ++y) { \
+		for(int y=BORDER; y<height-BORDER; ++y) { \
 			FUNC<false>(x, y); \
 		} \
 	} \
+	DEBUG \
+	if(false){ \
 	for(int i=0; i<width; ++i) { \
 		for(int j=0; j<BORDER && j<height/2; ++j) { \
 			FUNC<true>(i, j); \
 			FUNC<true>(i, height-1-j); \
 		} \
 	} \
-	for(int i=0; i<height; ++i) { \
+	DEBUG \
+	for(int i=BORDER; i<height-BORDER; ++i) { \
 		for(int j=0; j<BORDER && j<width/2; ++j) { \
 			FUNC<true>(j, i); \
 			FUNC<true>(width-1-j, i); \
 		} \
-	}
+	} \
+	DEBUG }
 
 inline void Grid::FullCycle() {
+	DEBUG
  	FOR_EACH_SAFE_BORDERS(1, CalcOutflux);
+	DEBUG
  	FOR_EACH_SAFE_BORDERS(1, UpdateWaterLevelAndVelocity);
+	DEBUG
  	FOR_EACH_SAFE_BORDERS(1, ErosionAndDeposition);
- 	FOR_EACH_SAFE_BORDERS(16, SedimentTransportation);
- 	FOR_EACH_SAFE_BORDERS(1, Evaporation);
+	DEBUG
+ 	FOR_EACH_SAFE_BORDERS(64, SedimentTransportation);
+	DEBUG
+//  	FOR_EACH_SAFE_BORDERS(1, Evaporation);
+	DEBUG
 }
 
 #undef SAFE_COND_GRID
