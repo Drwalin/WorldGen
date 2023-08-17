@@ -17,7 +17,7 @@ add_custom_target(
 )
 set_target_properties(run PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
-file(
-	COPY "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"  
-	DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}"
-)
+# file(
+# 	COPY "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json"  
+# 	DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}"
+# )

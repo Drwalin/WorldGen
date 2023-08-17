@@ -16,6 +16,8 @@
 template<bool safe>
 TileId HydroErosion::At(int x, int y) const {
 	if(wrap) {
+		x = x%width;
+		y = y%height;
 		return ((x+width)%width) + ((y+height)%height) * width;
 	} else {
 		if constexpr(safe) {
@@ -28,12 +30,15 @@ TileId HydroErosion::At(int x, int y) const {
 	}
 }
 
+template TileId HydroErosion::At<false>(int x, int y) const;
+template TileId HydroErosion::At<true>(int x, int y) const;
+
 template<bool safe, int dir>
 TileId HydroErosion::Neighbour(int x, int y) const {
 	if constexpr(dir == 0) return At<safe>(x-1, y);
-	if constexpr(dir == 1) return At<safe>(x, y+1);
+	if constexpr(dir == 1) return At<safe>(x, y-1);
 	if constexpr(dir == 2) return At<safe>(x+1, y);
-	if constexpr(dir == 3) return At<safe>(x, y-1);
+	if constexpr(dir == 3) return At<safe>(x, y+1);
 }
 
 template<bool safe>
@@ -46,59 +51,71 @@ TileId HydroErosion::Neighbour(int x, int y, int dir) const {
 	}
 }
 
+template<bool safe>
+void HydroErosion::GetNeighbours(int x, int y, TileId* neighs) const {
+	neighs[0] = Neighbour<safe, 0>(x, y);
+	neighs[1] = Neighbour<safe, 1>(x, y);
+	neighs[2] = Neighbour<safe, 2>(x, y);
+	neighs[3] = Neighbour<safe, 3>(x, y);
+}
+
+template<bool safe>
+void HydroErosion::GetNeighboursOrSelf(int x, int y, TileId self, TileId* neighs) const {
+	neighs[0] = Neighbour<safe, 0>(x, y);
+	neighs[1] = Neighbour<safe, 1>(x, y);
+	neighs[2] = Neighbour<safe, 2>(x, y);
+	neighs[3] = Neighbour<safe, 3>(x, y);
+	for(int i=0; i<4; ++i) {
+		if(neighs[i] < 0) {
+			neighs[i] = self;
+		}
+	}
+}
+
+template<bool safe>
+void HydroErosion::GetNeighboursOrSelf(int x, int y, TileId* neighs) const {
+	GetNeighboursOrSelf<safe>(x, y, At<safe>(x, y), neighs);
+}
 
 
 
 
-template<bool safe, int dir>
-float HydroErosion::CalcFluxInDirection(TileId src, TileId neigh) const {
-	const float f_old = fluxArray[src].v[dir];
+template<bool safe>
+void HydroErosion::CalcFluxInDirection(TileId src, TileId neigh, int dir) {
 	const float dh = b[src] + d[src] - b[neigh] - d[neigh];
-// 	const float dh = b[src] + s[src] + d[src] - b[neigh] - s[neigh] - d[neigh];
-	return std::max<float>(
+	fluxArray[src].v[dir] = std::max<float>(
 			0.f,
-			f_old + dt * A * g * dh / l
+			fluxArray[src].v[dir] + dt * A * g * dh / l
 			);
 }
 
 void HydroErosion::LimitFlux(TileId src) {
-	float sum = f[src].L + f[src].B + f[src].R + f[src].T;
-	float water = d[src] * A;
-	float outflux = sum * dt;
-	if(outflux < 0.0000001) {
+	float water = d[src] * l * l;
+	float outflux = (f[src].L + f[src].B + f[src].R + f[src].T) * dt;
+	if(outflux < 0.0001) {
 		f[src].L = 0;
 		f[src].B = 0;
 		f[src].R = 0;
 		f[src].T = 0;
 		return;
 	}
-	if(outflux-0.0000001 < water) {
-		return;
+	if(water < outflux) {
+		const float K = std::min(1.f, water / outflux);
+		f[src].L *= K;
+		f[src].B *= K;
+		f[src].R *= K;
+		f[src].T *= K;
 	}
-	float K = water / outflux;
-	f[src].L *= K;
-	f[src].B *= K;
-	f[src].R *= K;
-	f[src].T *= K;
 }
 
 // 3.2.1
 template<bool safe>
 void HydroErosion::CalcOutflux(int x, int y) {
 	TileId src = At<false>(x, y);
-	TileId neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
-	fluxArray[src].v[0] = 0;
-	fluxArray[src].v[1] = 0;
-	fluxArray[src].v[2] = 0;
-	fluxArray[src].v[3] = 0;
-	SAFE_COND_GRID(neighs[0]>=0, (fluxArray[src].v[0] = CalcFluxInDirection<safe, 0>(src, neighs[0])));
-	SAFE_COND_GRID(neighs[1]>=0, (fluxArray[src].v[1] = CalcFluxInDirection<safe, 1>(src, neighs[1])));
-	SAFE_COND_GRID(neighs[2]>=0, (fluxArray[src].v[2] = CalcFluxInDirection<safe, 2>(src, neighs[2])));
-	SAFE_COND_GRID(neighs[3]>=0, (fluxArray[src].v[3] = CalcFluxInDirection<safe, 3>(src, neighs[3])));
+	TileId neighs[4];
+	GetNeighbours<safe>(x, y, neighs);
+	for(int i=0; i<4; ++i)
+		CalcFluxInDirection<safe>(src, neighs[i], i);
 	LimitFlux(src);
 }
 
@@ -110,29 +127,37 @@ void HydroErosion::CalcOutflux(int x, int y) {
 template<bool safe>
 void HydroErosion::UpdateWaterLevelAndVelocity(int x, int y) {
 	TileId src = At<false>(x, y);
-	TileId neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
+	TileId neighs[4];
+	GetNeighbours<safe>(x, y, neighs);
 	
-	float dWx=0, dWy=0;
-	float lx=0, ly=0;
-	SAFE_COND_GRID(neighs[0]>=0, (lx += l, dWx += fluxArray[neighs[0]].v[2] - fluxArray[src].v[0]));
-	SAFE_COND_GRID(neighs[2]>=0, (lx += l, dWx += fluxArray[neighs[2]].v[0] - fluxArray[src].v[2]));
-	SAFE_COND_GRID(neighs[1]>=0, (ly += l, dWy += fluxArray[neighs[1]].v[3] - fluxArray[src].v[1]));
-	SAFE_COND_GRID(neighs[3]>=0, (ly += l, dWy += fluxArray[neighs[3]].v[1] - fluxArray[src].v[3]));
-	const float fs = dWx + dWy;
-	const float DV_A = fs*dt/(lx*ly);
-	d[src] += DV_A;
-	float d_ = d[src] - DV_A*0.5f;
-	if(d_ < 0.000001) {
+	const float DV = (
+		  fluxArray[neighs[0]].v[2] - fluxArray[src].v[0]
+		+ fluxArray[neighs[1]].v[3] - fluxArray[src].v[1]
+		+ fluxArray[neighs[2]].v[0] - fluxArray[src].v[2]
+		+ fluxArray[neighs[3]].v[1] - fluxArray[src].v[3]
+		) * dt;
+	
+	float d_ = d[src];
+	
+	d[src] += DV / (l*l);
+	
+	d_ = (d[src] + d_)*0.5f;
+	if(d_ < 0.001) {
 		vx[src] = 0;
 		vy[src] = 0;
 		return;
 	}
-	vx[src] = dWx / (lx * d_);
-	vy[src] = dWy / (ly * d_);
+	
+	
+	
+	
+	const float dWx = fluxArray[neighs[0]].v[2] - fluxArray[src].v[0]
+		- fluxArray[neighs[2]].v[0] + fluxArray[src].v[2];
+	const float dWy = -fluxArray[neighs[1]].v[3] + fluxArray[src].v[1]
+		+ fluxArray[neighs[3]].v[1] - fluxArray[src].v[3];
+	
+	vx[src] = dWx / (l * d_) / 2;
+	vy[src] = dWy / (l * d_) / 2;
 }
 
 
@@ -141,52 +166,16 @@ void HydroErosion::UpdateWaterLevelAndVelocity(int x, int y) {
 
 template<bool safe>
 float HydroErosion::SinusLocalTiltAngle(TileId src, int x, int y) const {
-	float nx, ny, nz;
-	float vax=0, vaz=0;
-	float vby=0, vbz=0;
-	const float vay=0, vbx=0;
-	
-	TileId neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
-	
-	float xaz, xbz, yaz, ybz;
-	xaz = xbz = yaz = ybz = d[src];
-	
-	SAFE_COND_GRID(neighs[0]>=0, (vax += l, xaz = b[neighs[0]]));
-	SAFE_COND_GRID(neighs[2]>=0, (vax += l, xbz = b[neighs[2]]));
-	SAFE_COND_GRID(neighs[1]>=0, (vby += l, yaz = b[neighs[1]]));
-	SAFE_COND_GRID(neighs[3]>=0, (vby += l, ybz = b[neighs[3]]));
-	
-	vaz = xbz - xaz;
-	vbz = ybz - yaz;
-	
-	nx = vay*vbz - vaz*vby;
-	ny = vax*vbz - vaz*vbx;
-	nz = vay*vbx - vax*vby;
-	
-	if(nz < 0) {
-		nx = -nx;
-		ny = -ny;
-		nz = -nz;
+	TileId neighs[4];
+	GetNeighboursOrSelf<safe>(x, y, neighs);
+	float h[4];
+	for(int i=0; i<4; ++i) {
+		h[i] = ground[neighs[i]];
 	}
-	
-	const float nl = sqrt(nx*nx + ny*ny + nz*nz);
-	
-	nx /= nl;
-	ny /= nl;
-	nz /= nl;
-	
-	// cross product between unit normal and unit up
-	
-	const float tx = ny*1.f - nz*0.f;
-	const float ty = nx*1.f - nz*0.f;
-	const float tz = ny*0.f - nx*0.f;
-	
-	float ret = sqrt(tx*tx + ty*ty + tz*tz);
-	return ret;
+	float dbdx = (h[2]-h[0]) / (2.f * l);
+	float dbdy = (h[1]-h[3]) / (2.f * l);
+	float dxy = dbdx*dbdx + dbdy*dbdy;
+	return sqrt(dxy) / sqrt(1 + dxy);
 }
 
 // 3.3
@@ -195,8 +184,6 @@ void HydroErosion::ErosionAndDeposition(int x, int y) {
 	TileId src = At<false>(x, y);
 	const float sin_tilt = std::max<float>(SinusLocalTiltAngle<safe>(src, x, y), 0.0);
 	float C = Kc * sin_tilt * sqrt(vx[src]*vx[src] + vy[src]*vy[src]);
-// 	C = std::min(C, 2.0f);
-// 	printf(" C = %f (v = %f, %f)\n", C, vx[src], vy[src]);
 	
 	if(C > sediment[src]) { // deposit sediment to ground
 		const float amount = Ks * (C - sediment[src]) * dt;
@@ -216,119 +203,69 @@ void HydroErosion::ErosionAndDeposition(int x, int y) {
 // 3.4
 template<bool safe>
 void HydroErosion::SedimentTransportation(int x, int y) {
-// 	TileId dst = At<false>(x, y);
-// 	float sx, sy;
-// 	sx = (x - vx[dst]*dt)/l;
-// 	sy = (y - vy[dst]*dt)/l;
-// 	
-// 	int SX = sx;
-// 	int SY = sy;
-// 	
-// 	TileId a00 = At<false>(SX, SY);
-// 	TileId a10 = At<false>(SX+1, SY);
-// 	TileId a11 = At<false>(SX+1, SY+1);
-// 	TileId a01 = At<false>(SX, SY+1);
-// 	
-// 	// boundary check - to test
-// 	{
-// 		if(a00 < 0 && a10 < 0) {
-// 			a00 = a01;
-// 			a10 = a11;
-// 		}
-// 		if(a00 < 0 && a01 < 0) {
-// 			a00 = a10;
-// 			a01 = a11;
-// 		}
-// 		if(a11 < 0 && a10 < 0) {
-// 			a11 = a01;
-// 			a10 = a00;
-// 		}
-// 		if(a11 < 0 && a01 < 0) {
-// 			a11 = a10;
-// 			a01 = a00;
-// 		}
-// 		
-// 		if(a00 < 0 || a01 < 0 || a10 < 0 || a11 < 0) {
-// 			newSediment[dst] = 0;
-// 			return;
-// 		}
-// 	}
-// 	
-// 	const float rx = sx - (float)SX;
-// 	const float ry = sy - (float)SY;
-// 	
-// 	float ds00 = s[a00] * (1-rx) * (1-ry);
-// 	float ds10 = s[a10] * (rx) * (1-ry);
-// 	float ds01 = s[a01] * (1-rx) * (ry);
-// 	float ds11 = s[a11] * (rx) * (ry);
-// 	
-// 	s[a00] -= ds00;
-// 	s[a10] -= ds10;
-// 	s[a01] -= ds01;
-// 	s[a11] -= ds11;
-// 	
-// 	newSediment[dst] += ds00 + ds10 + ds01 + ds11;
-	
-	
+	return ;
 	
 	TileId dst = At<false>(x, y);
 	float sx, sy;
-	sx = (x + vx[dst]*dt)/l;
-	sy = (y + vy[dst]*dt)/l;
+	sx = x - vx[dst]*dt/l;
+	sy = y - vy[dst]*dt/l;
 	
 	int SX = sx;
 	int SY = sy;
 	
-	TileId a00 = At<true>(SX, SY);
-	TileId a10 = At<true>(SX+1, SY);
-	TileId a11 = At<true>(SX+1, SY+1);
-	TileId a01 = At<true>(SX, SY+1);
-	
-	// boundary check - to test
-	{
-		if(a00 < 0 && a10 < 0) {
-			a00 = a01;
-			a10 = a11;
-		}
-		if(a00 < 0 && a01 < 0) {
-			a00 = a10;
-			a01 = a11;
-		}
-		if(a11 < 0 && a10 < 0) {
-			a11 = a01;
-			a10 = a00;
-		}
-		if(a11 < 0 && a01 < 0) {
-			a11 = a10;
-			a01 = a00;
-		}
-		
-		if(a00 < 0 || a01 < 0 || a10 < 0 || a11 < 0) {
-			newSediment[dst] = s[dst];
-			return;
-		}
-	}
+	TileId a00 = At<false>(SX, SY);
+	TileId a10 = At<false>(SX+1, SY);
+	TileId a11 = At<false>(SX+1, SY+1);
+	TileId a01 = At<false>(SX, SY+1);
 	
 	const float rx = sx - (float)SX;
 	const float ry = sy - (float)SY;
 	
-	const float sed = s[dst];
-	s[dst] = 0;
+	const float ds00 = s[a00];
+	const float ds10 = s[a10];
+	const float ds11 = s[a11];
+	const float ds01 = s[a01];
 	
-	float ds00 = sed * (1-rx) * (1-ry);
-	float ds10 = sed * (rx) * (1-ry);
-	float ds01 = sed * (1-rx) * (ry);
-	float ds11 = sed * (rx) * (ry);
+	const float s_top = rx * ds10 + (1-rx) * ds00;
+	const float s_bot = rx * ds11 + (1-rx) * ds01;
 	
-	newSediment[a00] += ds00;
-	newSediment[a10] += ds10;
-	newSediment[a01] += ds01;
-	newSediment[a11] += ds11;
+	newSediment[dst] = ry * s_top + (1-ry) * s_bot;
+	
+	
+	
+// 	TileId dst = At<false>(x, y);
+// 	float sx, sy;
+// 	sx = (x*l + vx[dst]*dt)/l;
+// 	sy = (y*l + vy[dst]*dt)/l;
+// 	
+// 	int SX = sx;
+// 	int SY = sy;
+// 	
+// 	TileId a00 = At<safe>(SX, SY);
+// 	TileId a10 = At<safe>(SX+1, SY);
+// 	TileId a11 = At<safe>(SX+1, SY+1);
+// 	TileId a01 = At<safe>(SX, SY+1);
+// 	
+// 	const float rx = sx - (float)SX;
+// 	const float ry = sy - (float)SY;
+// 	
+// 	const float sed = s[dst];
+// 	s[dst] = 0;
+// 	
+// 	float ds00 = sed * (1-rx) * (1-ry);
+// 	float ds10 = sed * (rx) * (1-ry);
+// 	float ds01 = sed * (1-rx) * (ry);
+// 	float ds11 = sed * (rx) * (ry);
+// 	
+// 	newSediment[a00] += ds00;
+// 	newSediment[a10] += ds10;
+// 	newSediment[a01] += ds01;
+// 	newSediment[a11] += ds11;
 }
 
 template<bool safe>
 void HydroErosion::SedimentTransportationUpdateWhatsLeft(int x, int y) {
-	TileId src = At<false>(x, y);
+	TileId src = At<safe>(x, y);
 	s[src] = newSediment[src];
 	newSediment[src] = 0;
 }
@@ -345,7 +282,7 @@ float HydroErosion::EvaporationRate(int x, int y) {
 template<bool safe>
 void HydroErosion::Evaporation(int x, int y) {
 	TileId src = At<false>(x, y);
-	d[src] -= std::min<float>(0.1, d[src] * EvaporationRate(x, y)) * dt;
+	d[src] = std::max(0.f, d[src] * (1.f - 0.1f*dt));
 }
 
 
@@ -403,7 +340,7 @@ void HydroErosion::FullCycle() {
 	};
 		
 	
-// 	printf("\n\n");
+	printf("\n\n");
 	PrintWater();
  	FOR_EACH_SAFE_BORDERS((wrap?0:1), CalcOutflux);
 	PrintWater();

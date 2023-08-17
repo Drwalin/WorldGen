@@ -17,7 +17,7 @@ int main(int argc, char ** argv) {
 	unsigned width, height;
 // 	Load(&data, width, height, 0, 100, argv[1]);
 	width = height = 256;
-	HydroErosion grid(width, height, 5);
+	HydroErosion grid(width, height);
 // 	Grid grid;
 	
 	char str[1024];
