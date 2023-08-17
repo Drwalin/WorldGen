@@ -80,10 +80,11 @@ public:
 	};
 	float minimumSedimentCapacity;
 	
-	HydroErosion(int width, int height, float l) : width(width), height(height), l(l) {
+	HydroErosion(int width, int height) : width(width), height(height) {
 		wrap = true;
 		dt = 0.02;
-		A = l*l;
+		A = 0.6;
+		l = 1;
 		g = 9.81;
 		Kd = 0.1;
 		Kc = 0.5;
@@ -125,8 +126,15 @@ public:
 	template<bool safe>
 	TileId Neighbour(int x, int y, int dir) const;
 	
-	template<bool safe, int dir>
-	float CalcFluxInDirection(TileId src, TileId neigh) const;
+	template<bool safe>
+	void GetNeighbours(int x, int y, TileId* neighs) const;
+	template<bool safe>
+	void GetNeighboursOrSelf(int x, int y, TileId self, TileId* neighs) const;
+	template<bool safe>
+	void GetNeighboursOrSelf(int x, int y, TileId* neighs) const;
+	
+	template<bool safe>
+	void CalcFluxInDirection(TileId src, TileId neigh, int dir);
 	void LimitFlux(TileId src);
 	template<bool safe>
 	void CalcOutflux(int x, int y); // 3.2.1
