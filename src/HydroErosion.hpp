@@ -86,7 +86,6 @@ public:
 		A = 0.6;
 		l = 1;
 		g = 9.81;
-		Kd = 0.1;
 		Kc = 0.5;
 		minimumSedimentCapacity = 0.1;
 		
@@ -94,7 +93,8 @@ public:
 		water = new float[width*height];
 		suspendedSediment = new float[width*height];
 		newSediment = new float[width*height];
-		Ks = 0.1;
+		Kd = 0.5;//0.1;
+		Ks = 0.5;//0.1;
 		f = new Flux[width*height];
 		vx = new float[width*height];
 		vy = new float[width*height];
@@ -158,7 +158,7 @@ public:
 	void Evaporation(int x, int y); // 3.5
 	
 	// to be executed after water increase
-	void FullCycle();
+	void FullCycle(bool printStats);
 };
 
 struct Tile {
