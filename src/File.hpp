@@ -53,16 +53,15 @@ inline void Save(float* data, unsigned width, unsigned height, const char* filen
 	delete[] image;
 }
 
-inline void Load(float** data, unsigned& width, unsigned &height, float min, float max,
+inline void Load(float* data, unsigned& width, unsigned &height, float min, float max,
 		const char* filename) {
 	unsigned char* image = NULL;
-	lodepng_decode_file(&image, &width, &width, filename, LCT_GREY, 16);
+	lodepng_decode_file(&image, &width, &height, filename, LCT_GREY, 16);
 	uint16_t* ptr = (uint16_t*)image;
-	*data = new float[width*height];
 	for(size_t i=0; i<(size_t)width*(size_t)height; ++i) {
 		uint16_t v = ptr[i];
 		v = (v<<8) | (v>>8);
-		(*data)[i] = (((float)(v)) / ((float)0xFFFF)) * (max - min) + min;
+		data[i] = (((float)(v)) / ((float)0xFFFF)) * (max - min) + min;
 	}
 }
 
