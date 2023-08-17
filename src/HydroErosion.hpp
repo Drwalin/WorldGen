@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cinttypes>
 
+#include <glm/glm.hpp>
+
 struct Flux {
 	float L;
 	float T;
@@ -24,28 +26,17 @@ using TileId = int32_t;
 class HydroErosion {
 public:
 	
-	union {
-		float *b;
-		float *ground;
-	};
-	union {
-		float *water;
-		float *d;
-	};
-	union {
-		float *sediment;
-		float *suspendedSediment;
-		float *s;
-	};
-	union {
-		float *newSediment;
-	};
-	union {
-		Flux *f;
-		FloatArray4 *fluxArray;
-	};
-	float *vx;
-	float *vy;
+	float *ground;
+	
+	float *oldWater;
+	float *newWater;
+	
+	float *oldSediment;
+	float *newSediment;
+	
+	// momentum
+	glm::vec2 *oldMomentum;
+	glm::vec2 *newMomentum;
 	
 public:
 	
@@ -90,30 +81,33 @@ public:
 		minimumSedimentCapacity = 0.1;
 		
 		ground = new float[width*height];
-		water = new float[width*height];
-		suspendedSediment = new float[width*height];
+		oldWater = new float[width*height];
+		newWater = new float[width*height];
+		oldSediment = new float[width*height];
 		newSediment = new float[width*height];
+		oldMomentum = new glm::vec2[width*height];
+		newMomentum = new glm::vec2[width*height];
+		
 		Ks = 0.1;
-		f = new Flux[width*height];
-		vx = new float[width*height];
-		vy = new float[width*height];
 		for(int i=0; i<width*height; ++i) {
 			ground[i] = 0;
-			water[i] = 0;
-			suspendedSediment[i] = 0;
-			vx[i] = 0;
-			vy[i] = 0;
+			oldWater[i] = 0;
+			newWater[i] = 0;
+			oldSediment[i] = 0;
+			newSediment[i] = 0;
+			oldMomentum[i] = {0,0};
+			newMomentum[i] = {0,0};
 		}
 	}
 	
 	~HydroErosion() {
-		delete ground;
-		delete water;
-		delete suspendedSediment;
-		delete newSediment;
-		delete f;
-		delete vx;
-		delete vy;
+		delete[] ground;
+		delete[] oldWater;
+		delete[] newWater;
+		delete[] oldSediment;
+		delete[] newSediment;
+		delete[] oldMomentum;
+		delete[] newMomentum;
 	}
 	
 public:
@@ -125,29 +119,40 @@ public:
 	template<bool safe>
 	TileId Neighbour(int x, int y, int dir) const;
 	
-	template<bool safe, int dir>
-	float CalcFluxInDirection(TileId src, TileId neigh) const;
-	void LimitFlux(TileId src);
 	template<bool safe>
-	void CalcOutflux(int x, int y); // 3.2.1
+	void GetNeighbours(int x, int y, TileId* neighs) const;
+	template<bool safe>
+	void GetNeighboursOrSelf(int x, int y, TileId self, TileId* neighs) const;
+	template<bool safe>
+	void GetNeighboursOrSelf(int x, int y, TileId* neighs) const;
+	
+	glm::vec2 GetVelocity(TileId id) const;
 	
 	template<bool safe>
-	void UpdateWaterLevelAndVelocity(int x, int y); // 3.2.2
-
+	float GetMass(TileId id) const;
+	template<bool safe>
+	float GetTotalHeight(TileId id) const;
+	template<bool safe>
+	float GetTotalHeight(glm::vec2 pos) const;
 	
 	template<bool safe>
-	float SinusLocalTiltAngle(TileId t, int x, int y) const;
-	template<bool safe>
-	void ErosionAndDeposition(int x, int y); // 3.3
+	void UpdateMomentun(int x, int y);
 	
 	template<bool safe>
-	void SedimentTransportation(int x, int y); // 3.4
-	template<bool safe>
-	void SedimentTransportationUpdateWhatsLeft(int x, int y); // 3.4
+	void UpdateErosionAndDeposition(int x, int y);
 	
-	float EvaporationRate(int x, int y);
 	template<bool safe>
-	void Evaporation(int x, int y); // 3.5
+	float GetSedimentCapacity(TileId t, int x, int y) const;
+	template<bool safe>
+	void SedimentWaterAndMomentumTransportation(int x, int y);
+	
+	template<bool safe>
+	void Evaporation(int x, int y);
+	
+	template<bool safe>
+	void ThermalErosionStep1(int x, int y);
+	template<bool safe>
+	void ThermalErosionStep2(int x, int y);
 	
 	// to be executed after water increase
 	void FullCycle();
@@ -263,8 +268,6 @@ struct Grid {
 	// to be executed after water increase
 	inline void FullCycle();
 };
-
-#include "HydroErosion.incl.hpp"
 
 #endif
 

@@ -32,9 +32,14 @@ int main(int argc, char ** argv) {
 		for(int y=0; y<height; ++y) {
 			float X = x/30.0f;
 			float Y = y/30.0f;
-			grid.ground[grid.At<false>(x, y)] = sin(X) * sin(Y)*100;
+			grid.ground[grid.At<false>(x, y)] = sin(X) * sin(Y)*100 * (
+					sin(x/(float)(width-1) * 3.141592f) *
+					sin(y/(float)(height-1) * 3.141592f)
+					);
 		}
 	}
+	uint32_t w, h;
+	Load(grid.ground, w, h, 0, 1000, "../Noise256.png");
 	printf("Converted\n");
 	
 	grid.dt = 0.1;
@@ -43,7 +48,7 @@ int main(int argc, char ** argv) {
 	for(size_t I=0;; ++I) {
 		for(int x=0; x<width; ++x) {
 			for(int y=0; y<height; ++y) {
-				grid.water[grid.At<false>(x, y)] += 0.001 * grid.dt;
+				grid.oldWater[grid.At<false>(x, y)] += 0.001 * grid.dt;
 			}
 		}
 // 		for(int i=0; i<width*10; ++i) {
