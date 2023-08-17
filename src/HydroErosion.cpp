@@ -53,9 +53,10 @@ TileId HydroErosion::Neighbour(int x, int y, int dir) const {
 template<bool safe, int dir>
 float HydroErosion::CalcFluxInDirection(TileId src, TileId neigh) const {
 	const float f_old = fluxArray[src].v[dir];
-	const float dh = b[src] + s[src] + d[src] - b[neigh] - s[neigh] - d[neigh];
+	const float dh = b[src] + d[src] - b[neigh] - d[neigh];
+// 	const float dh = b[src] + s[src] + d[src] - b[neigh] - s[neigh] - d[neigh];
 	return std::max<float>(
-			0,
+			0.f,
 			f_old + dt * A * g * dh / l
 			);
 }
@@ -90,6 +91,10 @@ void HydroErosion::CalcOutflux(int x, int y) {
 		Neighbour<safe, 1>(x, y),
 		Neighbour<safe, 2>(x, y),
 		Neighbour<safe, 3>(x, y) };
+	fluxArray[src].v[0] = 0;
+	fluxArray[src].v[1] = 0;
+	fluxArray[src].v[2] = 0;
+	fluxArray[src].v[3] = 0;
 	SAFE_COND_GRID(neighs[0]>=0, (fluxArray[src].v[0] = CalcFluxInDirection<safe, 0>(src, neighs[0])));
 	SAFE_COND_GRID(neighs[1]>=0, (fluxArray[src].v[1] = CalcFluxInDirection<safe, 1>(src, neighs[1])));
 	SAFE_COND_GRID(neighs[2]>=0, (fluxArray[src].v[2] = CalcFluxInDirection<safe, 2>(src, neighs[2])));
@@ -188,17 +193,19 @@ float HydroErosion::SinusLocalTiltAngle(TileId src, int x, int y) const {
 template<bool safe>
 void HydroErosion::ErosionAndDeposition(int x, int y) {
 	TileId src = At<false>(x, y);
-	const float sin_tilt = std::max<float>(SinusLocalTiltAngle<safe>(src, x, y), 0.1f);
-	const float C = Kc * sin_tilt * sqrt(vx[src]*vx[src] + vy[src]*vy[src]);
+	const float sin_tilt = std::max<float>(SinusLocalTiltAngle<safe>(src, x, y), 0.0);
+	float C = Kc * sin_tilt * sqrt(vx[src]*vx[src] + vy[src]*vy[src]);
+// 	C = std::min(C, 2.0f);
+// 	printf(" C = %f (v = %f, %f)\n", C, vx[src], vy[src]);
 	
-	if(C > s[src]) { // deposit sediment to ground
-		const float amount = Ks * (C - s[src]);
-		b[src] -= amount;
-		s[src] += amount;
-	} else { // pick up soil from ground into deposit
-		const float amount = Kd * (s[src] - C);
-		b[src] += amount;
-		s[src] -= amount;
+	if(C > sediment[src]) { // deposit sediment to ground
+		const float amount = Ks * (C - sediment[src]) * dt;
+		ground[src] -= amount;
+		sediment[src] += amount;
+	} else if(C < sediment[src]) { // pick up soil from ground into deposit
+		const float amount = Kd * (sediment[src] - C) * dt;
+		ground[src] += amount;
+		sediment[src] -= amount;
 	}
 }
 
@@ -209,18 +216,73 @@ void HydroErosion::ErosionAndDeposition(int x, int y) {
 // 3.4
 template<bool safe>
 void HydroErosion::SedimentTransportation(int x, int y) {
+// 	TileId dst = At<false>(x, y);
+// 	float sx, sy;
+// 	sx = (x - vx[dst]*dt)/l;
+// 	sy = (y - vy[dst]*dt)/l;
+// 	
+// 	int SX = sx;
+// 	int SY = sy;
+// 	
+// 	TileId a00 = At<false>(SX, SY);
+// 	TileId a10 = At<false>(SX+1, SY);
+// 	TileId a11 = At<false>(SX+1, SY+1);
+// 	TileId a01 = At<false>(SX, SY+1);
+// 	
+// 	// boundary check - to test
+// 	{
+// 		if(a00 < 0 && a10 < 0) {
+// 			a00 = a01;
+// 			a10 = a11;
+// 		}
+// 		if(a00 < 0 && a01 < 0) {
+// 			a00 = a10;
+// 			a01 = a11;
+// 		}
+// 		if(a11 < 0 && a10 < 0) {
+// 			a11 = a01;
+// 			a10 = a00;
+// 		}
+// 		if(a11 < 0 && a01 < 0) {
+// 			a11 = a10;
+// 			a01 = a00;
+// 		}
+// 		
+// 		if(a00 < 0 || a01 < 0 || a10 < 0 || a11 < 0) {
+// 			newSediment[dst] = 0;
+// 			return;
+// 		}
+// 	}
+// 	
+// 	const float rx = sx - (float)SX;
+// 	const float ry = sy - (float)SY;
+// 	
+// 	float ds00 = s[a00] * (1-rx) * (1-ry);
+// 	float ds10 = s[a10] * (rx) * (1-ry);
+// 	float ds01 = s[a01] * (1-rx) * (ry);
+// 	float ds11 = s[a11] * (rx) * (ry);
+// 	
+// 	s[a00] -= ds00;
+// 	s[a10] -= ds10;
+// 	s[a01] -= ds01;
+// 	s[a11] -= ds11;
+// 	
+// 	newSediment[dst] += ds00 + ds10 + ds01 + ds11;
+	
+	
+	
 	TileId dst = At<false>(x, y);
 	float sx, sy;
-	sx = (x - vx[dst]*dt)/l;
-	sy = (y - vy[dst]*dt)/l;
+	sx = (x + vx[dst]*dt)/l;
+	sy = (y + vy[dst]*dt)/l;
 	
 	int SX = sx;
 	int SY = sy;
 	
-	TileId a00 = At<false>(SX, SY);
-	TileId a10 = At<false>(SX+1, SY);
-	TileId a11 = At<false>(SX+1, SY+1);
-	TileId a01 = At<false>(SX, SY+1);
+	TileId a00 = At<true>(SX, SY);
+	TileId a10 = At<true>(SX+1, SY);
+	TileId a11 = At<true>(SX+1, SY+1);
+	TileId a01 = At<true>(SX, SY+1);
 	
 	// boundary check - to test
 	{
@@ -242,7 +304,7 @@ void HydroErosion::SedimentTransportation(int x, int y) {
 		}
 		
 		if(a00 < 0 || a01 < 0 || a10 < 0 || a11 < 0) {
-			newSediment[dst] = 0;
+			newSediment[dst] = s[dst];
 			return;
 		}
 	}
@@ -250,38 +312,40 @@ void HydroErosion::SedimentTransportation(int x, int y) {
 	const float rx = sx - (float)SX;
 	const float ry = sy - (float)SY;
 	
-	float ds00 = s[a00] * (1-rx) * (1-ry);
-	float ds10 = s[a10] * (rx) * (1-ry);
-	float ds01 = s[a01] * (1-rx) * (ry);
-	float ds11 = s[a11] * (rx) * (ry);
+	const float sed = s[dst];
+	s[dst] = 0;
 	
-	s[a00] -= ds00;
-	s[a10] -= ds10;
-	s[a01] -= ds01;
-	s[a11] -= ds11;
+	float ds00 = sed * (1-rx) * (1-ry);
+	float ds10 = sed * (rx) * (1-ry);
+	float ds01 = sed * (1-rx) * (ry);
+	float ds11 = sed * (rx) * (ry);
 	
-	newSediment[dst] += ds00 + ds10 + ds01 + ds11;
+	newSediment[a00] += ds00;
+	newSediment[a10] += ds10;
+	newSediment[a01] += ds01;
+	newSediment[a11] += ds11;
 }
 
 template<bool safe>
 void HydroErosion::SedimentTransportationUpdateWhatsLeft(int x, int y) {
 	TileId src = At<false>(x, y);
-	s[src] += newSediment[src];
+	s[src] = newSediment[src];
 	newSediment[src] = 0;
 }
 
 
 
 
+
 float HydroErosion::EvaporationRate(int x, int y) {
-	return 0.001;
+	return 0.1;
 }
 
 // 3.5
 template<bool safe>
 void HydroErosion::Evaporation(int x, int y) {
 	TileId src = At<false>(x, y);
-	d[src] *= 1 - EvaporationRate(x, y) * dt;
+	d[src] -= std::min<float>(0.1, d[src] * EvaporationRate(x, y)) * dt;
 }
 
 
@@ -309,6 +373,9 @@ void HydroErosion::Evaporation(int x, int y) {
 
 // to be executed after water increase
 void HydroErosion::FullCycle() {
+	for(int i=0; i<width*height; ++i) {
+		newSediment[i] = 0;
+	}
 	struct three {
 		float water;
 		float sediment;
@@ -327,22 +394,22 @@ void HydroErosion::FullCycle() {
 		for(int i=0; i<width*height; ++i) {
 			sumSed += s[i];
 		}
-		return three{sumWater, sumSed, sumGround};
+		return three{sumWater/(width*height), sumSed/(width*height), sumGround/(width*height)};
 	};
 	
 	auto PrintWater = [&]() {
 		auto w = SumWater();
-// 		printf("water = %f  %f  %f   + %f\n", w.water, w.sediment, w.ground, w.sediment+w.ground);
+		printf("water: %f,  sediment: %f,  ground: %f   all dirt: %f\n", w.water, w.sediment, w.ground, w.sediment+w.ground);
 	};
 		
 	
 // 	printf("\n\n");
 	PrintWater();
- 	FOR_EACH_SAFE_BORDERS(1, CalcOutflux);
+ 	FOR_EACH_SAFE_BORDERS((wrap?0:1), CalcOutflux);
 	PrintWater();
- 	FOR_EACH_SAFE_BORDERS(1, UpdateWaterLevelAndVelocity);
+ 	FOR_EACH_SAFE_BORDERS((wrap?0:1), UpdateWaterLevelAndVelocity);
 	PrintWater();
- 	FOR_EACH_SAFE_BORDERS(1, ErosionAndDeposition);
+ 	FOR_EACH_SAFE_BORDERS((wrap?0:4), ErosionAndDeposition);
 	PrintWater();
  	FOR_EACH_SAFE_BORDERS(0, SedimentTransportation);
  	FOR_EACH_SAFE_BORDERS(0, SedimentTransportationUpdateWhatsLeft);

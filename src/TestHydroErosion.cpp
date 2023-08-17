@@ -37,7 +37,7 @@ int main(int argc, char ** argv) {
 	}
 	printf("Converted\n");
 	
-	grid.dt = 0.02;
+	grid.dt = 0.1;
 	
 	long long beg = clock();
 	for(size_t I=0;; ++I) {

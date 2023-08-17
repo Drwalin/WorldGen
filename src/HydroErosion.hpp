@@ -81,7 +81,7 @@ public:
 	float minimumSedimentCapacity;
 	
 	HydroErosion(int width, int height, float l) : width(width), height(height), l(l) {
-		wrap = false;//true;
+		wrap = true;
 		dt = 0.02;
 		A = l*l;
 		g = 9.81;
