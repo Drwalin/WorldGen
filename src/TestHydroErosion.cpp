@@ -42,7 +42,13 @@ int main(int argc, char ** argv) {
 	Load(grid.ground, w, h, 0, 1000, "../Noise256.png");
 	printf("Converted\n");
 	
-	grid.dt = 0.1;
+	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
+		data[i] = grid.ground[i];
+	Save(data, width, height,
+			(std::string(str)
+			 + ".000.startpoint.png").c_str());
+	
+	grid.dt = 0.01;
 	
 	long long beg = clock();
 	for(size_t I=0;; ++I) {
