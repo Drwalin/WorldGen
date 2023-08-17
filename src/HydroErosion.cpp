@@ -233,6 +233,9 @@ void HydroErosion::SedimentWaterAndMomentumTransportation(int x, int y) {
 	const float sx = (x*l + v.x*dt)/l;
 	const float sy = (y*l + v.y*dt)/l;
 	
+// 	if(glm::length(v) > 10)
+// 		printf("Velocity = %f\n", glm::length(v));
+	
 	int SX = floor(sx);
 	int SY = floor(sy);
 	
