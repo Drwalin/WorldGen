@@ -17,13 +17,13 @@ set(
 )
 
 include_directories(./include/)
-aux_source_directory(./include/worldgen/ header_files)
-aux_source_directory(./src/ source_files)
+aux_source_directory(./include/worldgen/ wg_header_files)
+aux_source_directory(./src/ wg_source_files)
 aux_source_directory(./thirdparty/lodepng/ lodepng)
 
 add_library(WorldGen STATIC
-	${header_files}
-	${source_files}
+	${wg_header_files}
+	${wg_source_files}
 	${lodepng}
 )
 
