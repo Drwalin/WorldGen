@@ -4,11 +4,11 @@
 #include <cstdlib>
 #include <cstdio>
 
-#include "lodepng.cpp"
+#include "../thirdparty/lodepng/lodepng.h"
 
-#include "HydroErosion.hpp"
+#include "../include/worldgen/HydroErosion.hpp"
 
-#include "File.hpp"
+#include "../include/worldgen/File.hpp"
 
 int main(int argc, char ** argv) {
 	srand(time(NULL));

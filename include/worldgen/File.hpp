@@ -2,7 +2,7 @@
 #include <vector>
 #include <cinttypes>
 
-#include "lodepng.h"
+#include "../../thirdparty/lodepng/lodepng.h"
 
 void Save8(float* data, unsigned width, unsigned height, const char* filename) {
 	float min = data[0], max = data[0];
