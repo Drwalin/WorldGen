@@ -38,54 +38,19 @@ static glm::vec4 cubic(float v)
 	return glm::vec4(x, y, z, w) * (1.0f / 6.0f);
 }
 
-float textureBicubic(glm::vec2 p)
+static float sinc(float x)
 {
-
-	// 	glm::vec2 texSize = textureSize(sampler, 0);
-	// 	glm::vec2 invTexSize = 1.0 / texSize;
-
-// 	p -= 0.5f;
-// 
-	glm::vec2 fxy = glm::fract(p);
-	p -= fxy;
-
-	glm::vec4 xc = cubic(fxy.x);
-	glm::vec4 yc = cubic(fxy.y);
-
-	glm::vec4 c =
-		glm::vec4(p.x, p.x, p.y, p.y) + glm::vec4(-0.5, 1.5, -0.5, 1.5);
-
-	glm::vec4 s = glm::vec4(glm::vec2(xc.x, xc.z) + glm::vec2(xc.y, xc.w),
-							glm::vec2(yc.x, yc.z) + glm::vec2(yc.y, yc.w));
-	glm::vec4 offset =
-		c + glm::vec4(glm::vec2(xc.y, xc.w), glm::vec2(yc.y, yc.w)) / s;
-
-	// 	offset *= invTexSize.xxyy;
-
-	float sample0 = hx::Hash({offset.x, offset.z});
-	float sample1 = hx::Hash({offset.y, offset.z});
-	float sample2 = hx::Hash({offset.x, offset.w});
-	float sample3 = hx::Hash({offset.y, offset.w});
-
-	float sx = s.x / (s.x + s.y);
-	float sy = s.z / (s.z + s.w);
-
-	return glm::mix(glm::mix(sample3, sample2, sx),
-					glm::mix(sample1, sample0, sx), sy);
+	const float PI = 3.1415926;
+	return sin(PI * x) / (PI * x);
 }
 
-static float sinc(float x) {
-    const float PI = 3.1415926;
-    return sin(PI * x) / (PI * x);
-}
-
-static float LWeight(float x) {
-    if (fabs(x) < 1e-8) {
-        return 1.0f;
-    }
-    else {
-        return sinc(x) * sinc(x / 3);
-    }
+static float LWeight(float x)
+{
+	if (fabs(x) < 1e-8) {
+		return 1.0f;
+	} else {
+		return sinc(x) * sinc(x / 3);
+	}
 }
 
 float Lanczos(glm::vec2 texCoord, int seed)
@@ -101,8 +66,7 @@ float Lanczos(glm::vec2 texCoord, int seed)
 		fX = LWeight(float(m) - interpFactor.x);
 		float vecCooef1 = fX;
 		for (int n = -2; n <= 3; n++) {
-			float vecData =
-				hx::Hash(samplePos+glm::vec2(m, n), seed);
+			float vecData = hx::Hash(samplePos + glm::vec2(m, n), seed);
 			fY = LWeight(float(n) - interpFactor.y);
 			float vecCoeef2 = fY;
 			nSum += vecData * vecCoeef2 * vecCooef1;
@@ -111,25 +75,59 @@ float Lanczos(glm::vec2 texCoord, int seed)
 	return nSum;
 }
 
-float Cubic(float a, float b, float f)
+static inline float CubicFactor(float f)
 {
-	float f2 = f*f;
-	f = -2 * f * f2 + 3 * f2;
+	float f2 = f * f;
+	return -2 * f * f2 + 3 * f2;
+}
+
+static inline float Cubic(float a, float b, float f)
+{
+	f = CubicFactor(f);
 	return a * (1 - f) + b * f;
 }
 
 float Noise::NoiseV(glm::vec2 uv, int seed)
 {
-// 	return Lanczos(uv, seed);
-// 	return textureBicubic(uv);
+	// 	return Lanczos(uv, seed);
 
 	glm::vec2 u = glm::floor(uv);
 	glm::vec2 f = glm::fract(uv);
-	float a = hx::Hash(u);
-	float b = hx::Hash(u + glm::vec2(1.0, 0.0));
-	float c = hx::Hash(u + glm::vec2(0.0, 1.0));
-	float d = hx::Hash(u + glm::vec2(1.0, 1.0));
+	float a = hx::Hash(u, seed);
+	float b = hx::Hash(u + glm::vec2(1.0, 0.0), seed);
+	float c = hx::Hash(u + glm::vec2(0.0, 1.0), seed);
+	float d = hx::Hash(u + glm::vec2(1.0, 1.0), seed);
 	return Cubic(Cubic(a, b, f.x), Cubic(c, d, f.x), f.y);
+}
+
+static inline float CubicDerivative(float f) { return f * (-6 * f + 6); }
+
+glm::vec3 Noise::NoiseVG(glm::vec2 uv, int seed)
+{
+	glm::vec2 u = glm::floor(uv);
+	glm::vec2 f = glm::fract(uv);
+	float a= hx::Hash(u, seed);
+	float b = hx::Hash(u + glm::vec2(1.0, 0.0), seed);
+	float c = hx::Hash(u + glm::vec2(0.0, 1.0), seed);
+	float d = hx::Hash(u + glm::vec2(1.0, 1.0), seed);
+
+	float fx = CubicFactor(f.x);
+	float fy = CubicFactor(f.y);
+
+	float h = Cubic(Cubic(a, b, f.x), Cubic(c, d, f.x), f.y);
+
+	float ffx = CubicDerivative(f.x);
+	float ffy = CubicDerivative(f.y);
+	
+// 	std::swap(a,b);
+// 	std::swap(c,d);
+
+// 	float dx = (b - 1) * ffx * (1 - fy) + (d - c) * ffx * fy;
+// 	float dy = ((c - a) + (d - b + a - c) * fx) * ffy;
+
+		float dx = ffx * ((a - b) - fy * (a - b - c + d));
+		float dy = ffy * (a + c - (a - b + c - d) * fx);
+	return {h, dx, dy};
 }
 
 // 0: cubic
@@ -326,13 +324,8 @@ glm::vec3 Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
 		float h0 = NoiseV(x);
 		float h1 = NoiseV(x + glm::vec2(0.0625f, 0));
 		float h2 = NoiseV(x + glm::vec2(0, 0.0625f));
-		glm::vec3 n {
-			h0,
-			-(h1 - h0) / 0.0625f,
-			-(h2 - h0) / 0.0625f};
-		
-		
-		
+		glm::vec3 n{h0, -(h1 - h0) / 0.0625f, -(h2 - h0) / 0.0625f};
+
 		a += b * n.x;					 // accumulate values
 		d += b * glm::vec3(n.y, n.z, 0); // accumulate derivatives
 		b *= s;
@@ -345,7 +338,7 @@ glm::vec3 Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
 float Noise::fbm(glm::vec2 x, float H, int octaves)
 {
 	return FractalBrownianMotion(x, octaves).x;
-	
+
 	float G = exp2(-H);
 	float f = 1.0;
 	float a = 1.0;
@@ -358,38 +351,74 @@ float Noise::fbm(glm::vec2 x, float H, int octaves)
 	return t;
 }
 
-
-float Noise::Ridges(glm::vec2 x, float horizontalScale, float steep, float octaves)
+float Noise::Ridges(glm::vec2 x, float horizontalScale, float steep,
+					float octaves, float gradientInfluence, int seed)
 {
 	float h = 0;
 	float f = 1;
-	glm::vec2 grad = {0,0};
-	
+	glm::vec2 grad = {0, 0};
+
 	float div = 1.0f;
-	
+
 	for (int i = 0; i < octaves; i++) {
-		float h0 = NoiseV(x, i);
-		float h1 = NoiseV(x + glm::vec2(0.0625f, 0), i);
-		float h2 = NoiseV(x + glm::vec2(0, 0.0625f), i);
-		grad += glm::vec2{
-			(h1 - h0) / (0.0625f*horizontalScale),
-			(h2 - h0) / (0.0625f*horizontalScale)};
-		
-		float gf = glm::dot(grad, grad) * 0.7f;
-		gf = 1.0f / (1.0f + gf);
+		float h0 = NoiseV(x, i ^ seed);
+		float h1 = NoiseV(x + glm::vec2(0.0625f, 0), i ^ seed);
+		float h2 = NoiseV(x + glm::vec2(0, 0.0625f), i ^ seed);
+		grad += glm::vec2{(h1 - h0) / (0.0625f * horizontalScale),
+						  (h2 - h0) / (0.0625f * horizontalScale)};
+
+		float gf = glm::length(grad);
+		gf = exp(-gf * gf);
+		// 		gf = 1.0f / (1.0f + gf);
+		gf = gf * gradientInfluence + 1 - gradientInfluence;
+
 		h += h0 * gf * f;
 		f *= steep;
-		
+
 		div += f;
-		x *= 1.3f;
+		x *= 2.3;
+	}
+	return h / div;
+}
+
+float Noise::Ridges2(glm::vec2 x, float horizontalScale, float steep,
+					 float octaves, float gradientInfluence, int seed)
+{
+	float h = 0;
+	float f = 1;
+	glm::vec2 grad = {0, 0};
+
+	float div = 1.0f;
+
+	for (int i = 0; i < octaves; i++) {
+		glm::vec3 v = NoiseVG(x, i ^ seed);
+		v.y /= horizontalScale;
+		v.z /= horizontalScale;
+
+		grad.x += v.y;
+		grad.y += v.z;
+		float gf = glm::length(grad);
+		gf = exp(-gf * gf);
+		// 		gf = 1.0f / (1.0f + gf);
+		gf = gf * gradientInfluence + 1 - gradientInfluence;
+
+		h += v.y * gf * f;
+		f *= steep;
+
+		div += f;
+		x *= 2.3;
 	}
 	return h / div;
 }
 
 float Noise::Terrain(glm::vec2 p, float horizontalScale)
 {
-	return Ridges(p, horizontalScale, 0.85, 15);
+	float hr = Ridges2(p, horizontalScale, 0.8, 3, 0.99, 14321);
+	float hr2 =
+		Ridges2(p * 6.0f, horizontalScale * 6.0f, 0.8, 5, 0.99, 1423342321);
+	hr = (hr + hr2 * 0.3) / 1.3;
+	float h = Ridges2(p * 90.0f, horizontalScale * 90, 0.6, 3, 0, 32131);
+	return h * 0.02 + hr * 0.98;
 }
-
 
 } // namespace wg

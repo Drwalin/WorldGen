@@ -30,6 +30,7 @@ class Noise
 {
 public:
 	static float NoiseV(glm::vec2 x, int seed = 0);
+	static glm::vec3 NoiseVG(glm::vec2 x, int seed = 0);
 	
 	static float NoiseDV(glm::vec3 x);
 	static float NoiseDV(glm::vec2 x);
@@ -43,7 +44,8 @@ public:
 	static glm::vec3 FractalBrownianMotion(glm::vec2 x, int octaves);
 	static float fbm(glm::vec2 x, float H, int octaves);
 	
-	static float Ridges(glm::vec2 x, float horizontalScale, float steep, float octaves);
+	static float Ridges(glm::vec2 x, float horizontalScale, float steep, float octaves, float gradientInfluence, int seed);
+	static float Ridges2(glm::vec2 x, float horizontalScale, float steep, float octaves, float gradientInfluence, int seed);
 	
 	static float Terrain(glm::vec2 p, float horizontalScale);
 };
