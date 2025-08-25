@@ -8,7 +8,7 @@ namespace hx
 {
 static uint8_t lookUpTable[256][256];
 static uint8_t fill = []() -> uint8_t {
-	std::mt19937_64 mt(12345);
+	std::mt19937_64 mt(12345ull);
 	for (int i = 0; i < 256; ++i) {
 		for (int j=0; j<256; ++j) {
 			lookUpTable[i][j] = mt();
@@ -41,11 +41,15 @@ float Hash(glm::ivec3 p, int seed)
 
 float Hash(glm::ivec2 p, int seed)
 {
+	p.x ^= 0x811c9dc5;
+	p.x *= 0x01000193;
+	p.y ^= 0x811c9dc5;
+	p.y *= 0x01000193;
 	uint64_t v = 0;
 	v = lookUpTable[(seed>>16) & 255][(seed >> 24) & 255];
 	v = lookUpTable[(seed) & 255][(v + (seed >> 8)) & 255];
 	for (int i = 3; i >= 0; --i) {
-		v = lookUpTable[(v ^ (p.x>>(i<<3))) & 255][(v + (p.y>>(i<<3))) & 255];
+		v = lookUpTable[(v + (p.x>>(i<<3))) & 255][(v + (p.y>>(i<<3))) & 255];
 	}
 	return v / 255.0f;
 	
@@ -64,7 +68,7 @@ glm::vec2 Hash2(glm::ivec2 p, int seed)
 // x c2 mul 56 32 xrr c3 mul 23 xsr
 uint64_t mxrmx(uint64_t x)
 {
-	constexpr int HASH = 0;
+	constexpr int HASH = 1;
 	if (HASH != 5) {
 		x ^= 0xcbf29ce484222325ull;
 		x *= 0x00000100000001b3ull;

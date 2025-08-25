@@ -15,12 +15,12 @@
 
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512;
-int height = 512;
+int width = 500 * 4;
+int height = 500 * 4;
 
-float horizontalScale = 0.1f;
-float verticalScale = 15;
-float noiseHorizontalScale = 0.01f * 0.5;
+float horizontalScale = 0.04f;
+float verticalScale = 55;
+float noiseHorizontalScale = 0.01f * 0.5 * 0.03;
 
 struct Vertex {
 	float h;
@@ -105,7 +105,13 @@ int main(int argc, char **argv)
 	while (!glfwWindowShouldClose(gl::openGL.window)) {
 		DefaultIterationStart();
 
-		vbo.Update(verts, 0, sizeof(Vertex) * width * height);
+		{
+			static int count = 0;
+			++count;
+			if (count % 2 == 0) {
+				vbo.Update(verts, 0, sizeof(Vertex) * width * height);
+			}
+		}
 
 		// Use shader
 		shader.Use();
@@ -142,20 +148,30 @@ int main(int argc, char **argv)
 
 glm::ivec3 Color(int x, int y, float h)
 {
-	glm::vec3 c = {
-	(wg::Noise::FractalBrownianMotion({x*horizontalScale,00,y*horizontalScale}, 3)+2.0f).x * 63.0f,
-	(wg::Noise::FractalBrownianMotion({x*horizontalScale,10,y*horizontalScale}, 3)+2.0f).x * 63.0f,
-	(wg::Noise::FractalBrownianMotion({x*horizontalScale,20,y*horizontalScale}, 3)+2.0f).x * 63.0f};
-	
-	
+	glm::vec3 c = {(wg::Noise::FractalBrownianMotion(
+						{x * horizontalScale, 00, y * horizontalScale}, 3) +
+					2.0f)
+						   .x *
+					   63.0f,
+				   (wg::Noise::FractalBrownianMotion(
+						{x * horizontalScale, 10, y * horizontalScale}, 3) +
+					2.0f)
+						   .x *
+					   63.0f,
+				   (wg::Noise::FractalBrownianMotion(
+						{x * horizontalScale, 20, y * horizontalScale}, 3) +
+					2.0f)
+						   .x *
+					   63.0f};
+
 	if (h < 0.3) {
-		c = {c.x,0,0};
+		c = {c.x, 0, 0};
 	} else if (h < 0.7) {
-		c = {0,c.y,0};
+		c = {0, c.y, 0};
 	} else {
-		c = {0,0,c.z};
+		c = {0, 0, c.z};
 	}
-	
+
 	return c;
 }
 
@@ -165,29 +181,34 @@ glm::ivec3 ColorGradient(int x, int y, glm::vec3 g)
 	ga.x = 0;
 	float sl = glm::dot(ga, ga);
 	glm::vec3 c;
-	
-	float n = ((wg::Noise::FractalBrownianMotion({x*horizontalScale*10,00,y*horizontalScale*10}, 3)+1.0f).x * 0.5f);
-	
+
+	float n =
+		((wg::Noise::FractalBrownianMotion(
+			  {x * horizontalScale * 10, 00, y * horizontalScale * 10}, 3) +
+		  1.0f)
+			 .x *
+		 0.5f);
+
 	if (sl > 0.3) {
-		c = glm::vec3(((n/2.0f) + 0.5f) * 230.0f);
+		c = glm::vec3(((n / 2.0f) + 0.5f) * 230.0f);
 		c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
 	} else {
-		c = glm::vec3(((n/2.0f) + 0.5f) * 230.0f);
+		c = glm::vec3(((n / 2.0f) + 0.5f) * 230.0f);
 		c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
 		c.x /= 9.0f;
 		c.z /= 9.0f;
 	}
-	
+
 	glm::vec2 d{g.y, g.z};
 	glm::vec2 s{0.5, 0.2};
 	s = glm::normalize(s);
 	if (glm::dot(s, d) > 0.001) {
 		c *= 0.7;
 	}
-	
-// 	c = glm::vec3(n * 230.0f);
-// 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
-	
+
+	// 	c = glm::vec3(n * 230.0f);
+	// 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
+
 	return c;
 }
 
@@ -196,48 +217,72 @@ void ThreadFunction()
 	for (int x = 0; x < width; ++x) {
 		for (int y = 0; y < height; ++y) {
 			int i = x + y * width;
-			verts[i] = {0, {0,0,0, 1}};
+			verts[i] = {0, {0, 0, 0, 1}};
 		}
 	}
-	
-	for (int _x = 0; _x < width; ++_x) {
-		printf("\r p: %5i           ", _x);
+
+	for (int _x1 = 0; _x1 < width; _x1 += 64) {
+		printf("\r p: %5i           ", _x1);
 		fflush(stdout);
 		for (int _y = 0; _y < height; ++_y) {
-			int i = _x + _y * width;
-			glm::vec3 v;
-// 			v.x = wg::Noise::fbm(glm::vec2{x,y}*noiseHorizontalScale, 1, 5) * verticalScale;
-// 			float v1 = wg::Noise::fbm(glm::vec2{(x+0.1),y}*noiseHorizontalScale, 1, 5) * verticalScale;
-// 			float v2 = wg::Noise::fbm(glm::vec2{x,(y+0.1)}*noiseHorizontalScale, 1, 5) * verticalScale;
-			
-// 			v.x = wg::Noise::NoiseV(glm::vec2{x,y}*noiseHorizontalScale) * verticalScale;
-// 			float v1 = wg::Noise::NoiseV(glm::vec2{(x+0.1),y}*noiseHorizontalScale) * verticalScale;
-// 			float v2 = wg::Noise::NoiseV(glm::vec2{x,(y+0.1)}*noiseHorizontalScale) * verticalScale;
-			
-			float x = _x;
-			float y = _y;
-			
-			x -= 200;
-			y += 250;
-			
-// 			x += 115;
-// 			y += 30;
-// 			
-// 			x += 127;
-// 			y += 2;
-			
-			v.x = wg::Noise::Terrain(glm::vec2{x,y}*noiseHorizontalScale, horizontalScale) * verticalScale;
-			float v1 = wg::Noise::Terrain(glm::vec2{(x+0.1),y}*noiseHorizontalScale, horizontalScale) * verticalScale;
-			float v2 = wg::Noise::Terrain(glm::vec2{x,(y+0.1)}*noiseHorizontalScale, horizontalScale) * verticalScale;
-			
-			v.y = (v1 - v.x) / (0.1 * horizontalScale);
-			v.z = (v2 - v.x) / (0.1 * horizontalScale);
-// 			v *= verticalScale;
-			float h = v.x;
-// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1, 5);
-			glm::ivec3 c = ColorGradient(x, y, v);//glm::clamp(glm::vec3((h+1.0f)*63.0f*1.5f), glm::vec3(0), glm::vec3(255));
-			
-			verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+			for (int _x2 = 0; _x2 < 64; ++_x2) {
+				int _x = _x1 + _x2;
+				if (_x >= width) {
+					break;
+				}
+				int i = _x + _y * width;
+				glm::vec3 v;
+				// 			v.x =
+				// wg::Noise::fbm(glm::vec2{x,y}*noiseHorizontalScale, 1, 5) *
+				// verticalScale; 			float v1 =
+				// wg::Noise::fbm(glm::vec2{(x+0.1),y}*noiseHorizontalScale, 1,
+				// 5) * verticalScale; 			float v2 =
+				// wg::Noise::fbm(glm::vec2{x,(y+0.1)}*noiseHorizontalScale, 1,
+				// 5) * verticalScale;
+
+				// 			v.x =
+				// wg::Noise::NoiseV(glm::vec2{x,y}*noiseHorizontalScale) *
+				// verticalScale; 			float v1 =
+				// wg::Noise::NoiseV(glm::vec2{(x+0.1),y}*noiseHorizontalScale)
+				// * verticalScale; 			float v2 =
+				// wg::Noise::NoiseV(glm::vec2{x,(y+0.1)}*noiseHorizontalScale)
+				// * verticalScale;
+
+				float x = _x;
+				float y = _y;
+
+				x -= 100.0;
+				y -= 100.0;
+
+				// 			x += 115;
+				// 			y += 30;
+				//
+				// 			x += 127;
+				// 			y += 2;
+
+				v.x = wg::Noise::Terrain(glm::vec2{x, y} * noiseHorizontalScale,
+										 horizontalScale) *
+					  verticalScale;
+				float v1 = wg::Noise::Terrain(glm::vec2{(x + 0.1), y} *
+												  noiseHorizontalScale,
+											  horizontalScale) *
+						   verticalScale;
+				float v2 = wg::Noise::Terrain(glm::vec2{x, (y + 0.1)} *
+												  noiseHorizontalScale,
+											  horizontalScale) *
+						   verticalScale;
+
+				v.y = (v1 - v.x) / (0.1 * horizontalScale);
+				v.z = (v2 - v.x) / (0.1 * horizontalScale);
+				// 			v *= verticalScale;
+				float h = v.x;
+				// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1, 5);
+				glm::ivec3 c = ColorGradient(
+					x, y, v); // glm::clamp(glm::vec3((h+1.0f)*63.0f*1.5f),
+							  // glm::vec3(0), glm::vec3(255));
+
+				verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+			}
 		}
 	}
 	printf("\r Done!                         \n");

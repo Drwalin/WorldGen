@@ -1,0 +1,133 @@
+
+
+
+f(0) = 0
+f(1) = 1
+f'(0) = 0
+f'(1) = 0
+
+f(x) = ax^3 + bx^2 + cx + d
+
+f(0) = d = 0
+
+f(x) = ax^3 + bx^2 + cx
+f(x) = x ( ax^2 + bx + c)
+f(1) = a + b + c = 1
+
+f'(x) = 3ax^2 + 2bx + c
+f'(0) = c = 0
+
+f(x) = ax^3 + bx^2
+
+f'(1) = 3a + 2b = 0
+
+
+
+f(1) = a + b + c = 1
+f(1) = a + b = 1
+
+f(1) = a + b = 1
+f'(1) = 3a + 2b = 0
+
+a = 1-b
+b = 1-a
+
+3a + 2(1-a) = 0
+a + 2 = 0
+
+a = -2
+b = 1 - (-2) = 3
+
+
+
+f(x) = -2x^3 + 3x^2
+f'(x) = -6x^2 + 6x
+
+
+g(a,b,x) = a * (1 - f(x)) + b * f(x)
+
+
+h(x,y) = g(g(a,b,x), g(c,d,x), y)
+
+h(x,y) = g(
+		(a * (1 - f(x)) + b * f(x)),
+		(c * (1 - f(x)) + d * f(x)),
+		y)
+
+h(x,y) = 
+		(a * (1 - f(x)) + b * f(x)) * (1 - f(y)) +
+		(c * (1 - f(x)) + d * f(x)) * f(y)
+
+
+h(x,y) = 
+		(a - a*f(x) + b*f(x)) * (1 - f(y)) +
+		(c - c*f(x) + d*f(x)) * f(y)
+
+h(x,y) = 
+		(a - a*f(x) + b*f(x)) * 1 -
+		(a - a*f(x) + b*f(x)) * f(y) +
+		(c - c*f(x) + d*f(x)) * f(y)
+
+h(x,y) = 
+		(a - a*f(x) + b*f(x)) * 1 -
+		f(y) * (a + c - (a - b + c - d)*f(x))
+
+h(x,y) = 
+		(a - (a - b)*f(x)) * (1 - f(y)) +
+		(c - (c - d)*f(x)) * f(y)
+	
+h(x,y) = 
+		(a - (a - b)*f(x)) * (1 - f(y)) +
+		(c - (c - d)*f(x)) * f(y)
+
+	
+	
+h(x,y) / dy =
+		(
+		 (a - a*f(x) + b*f(x)) * 1 -
+		 f(y) * (a + c - (a - b + c - d)*f(x))
+		) / dy
+		
+h(x,y) / dy = f'(y) * (a + c - (a - b + c - d)*f(x))
+
+
+
+h(x,y) / dx =
+		(
+		 (a - (a - b)*f(x)) * (1 - f(y)) +
+		 (c - (c - d)*f(x)) * f(y)
+		) / dx
+		
+h(x,y) / dx =
+		 (a - b)*f'(x) * (1 - f(y)) +
+		 (c - d)*f'(x) * f(y)
+		
+h(x,y) / dx =
+		 f'(x) * (a - b) * (1 - f(y)) +
+		 f'(x) * (c - d) * f(y)
+		
+h(x,y) / dx =
+		 f'(x) * (
+				  (a - b) * (1 - f(y)) + (c - d) * f(y)
+				 )
+		
+h(x,y) / dx =
+		 f'(x) * (
+				  (a - b) -
+				  (a - b) * f(y) +
+				  (c - d) * f(y)
+				 )
+		
+h(x,y) / dx =
+		 f'(x) * ((a - b) - f(y) * (a - b - c + d))
+
+		 
+		 
+		 
+		 
+		 
+		 
+		 
+h(x,y) / dx =
+		 f'(x) * ((a - b) - f(y) * (a - b - c + d))
+h(x,y) / dy = f'(y) * (a + c - (a - b + c - d)*f(x))
