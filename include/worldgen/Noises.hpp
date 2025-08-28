@@ -24,6 +24,8 @@
 #include <glm/common.hpp>
 #include <glm/fwd.hpp>
 
+#include "../../thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp"
+
 namespace wg
 {
 class Noise
@@ -48,5 +50,30 @@ public:
 	static float Ridges2(glm::vec2 x, float horizontalScale, float steep, float octaves, float gradientInfluence, int seed);
 	
 	static float Terrain(glm::vec2 p, float horizontalScale);
+};
+
+class SimplexNoise
+{
+public:
+	SimplexNoise(uint64_t seed=12345);
+	~SimplexNoise();
+	
+	void Init(uint64_t seed);
+	
+	float Noise(glm::vec2 p);
+	float Noise(glm::vec3 p);
+	float Noise(glm::vec4 p);
+	
+	float Noise2(glm::vec2 p);
+	float Noise2(glm::vec3 p);
+	float Noise2(glm::vec4 p);
+	
+	float Fbm(glm::vec2 p, int octaves, float attenuation, float coordMultiplier, bool useGrad, bool useNoise2, float verticalScale);
+	
+	float Terrain(glm::vec2 p, float verticalScale);
+	
+private:
+	static OpenSimplex2F::OpenSimplexEnv *ose;
+	OpenSimplex2F::OpenSimplexGradients *osg = nullptr;
 };
 } // namespace wg

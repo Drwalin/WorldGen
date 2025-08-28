@@ -25,6 +25,8 @@ add_library(WorldGen STATIC
 	${wg_header_files}
 	${wg_source_files}
 	${lodepng}
+	thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.cpp
+	thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp
 )
 
 if(WORLDGEN_3D_RENDERER)
