@@ -166,70 +166,15 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-glm::ivec3 Color(int x, int y, float h)
-{
-	glm::vec3 c = {(wg::Noise::FractalBrownianMotion(
-						{x * horizontalScale, 00, y * horizontalScale}, 3) +
-					2.0f)
-						   .x *
-					   63.0f,
-				   (wg::Noise::FractalBrownianMotion(
-						{x * horizontalScale, 10, y * horizontalScale}, 3) +
-					2.0f)
-						   .x *
-					   63.0f,
-				   (wg::Noise::FractalBrownianMotion(
-						{x * horizontalScale, 20, y * horizontalScale}, 3) +
-					2.0f)
-						   .x *
-					   63.0f};
-
-	if (h < 0.3) {
-		c = {c.x, 0, 0};
-	} else if (h < 0.7) {
-		c = {0, c.y, 0};
-	} else {
-		c = {0, 0, c.z};
-	}
-
-	return c;
-}
-
-glm::ivec3 ColorGradient(int x, int y, glm::vec3 g)
+glm::ivec3 ColorGradient(int x, int y)
 {
 	thread_local wg::SimplexNoise colorSimplex(12342312);
-	glm::vec3 ga = glm::abs(g);
-	ga.x = 0;
-	float sl = glm::dot(ga, ga);
-	glm::vec3 c;
 
 	float n = colorSimplex.Noise2(glm::vec3{x * 10, 00, y * 10});
 	
-	c = {n,n,n};
+	glm::vec3 c = {n,n,n};
 	c = glm::vec3(n * 230.0f);
 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
-	return c;
-
-	if (sl > 0.8) {
-		c = glm::vec3(((n / 2.0f) + 0.5f) * 230.0f);
-		c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
-	} else {
-		c = glm::vec3(((n / 2.0f) + 0.5f) * 230.0f);
-		c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
-		c.x /= 9.0f;
-		c.z /= 9.0f;
-	}
-
-	// 	glm::vec2 d{g.y, g.z};
-	// 	glm::vec2 s{0.5, 0.2};
-	// 	s = glm::normalize(s);
-	// 	if (glm::dot(s, d) > 0.001) {
-	// 		c *= 0.7;
-	// 	}
-
-	// 	c = glm::vec3(n * 230.0f);
-	// 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
-
 	return c;
 }
 
@@ -276,42 +221,16 @@ void ThreadFunction()
 					const int i = _x + _y * width;
 					glm::vec3 v;
 
-					x += 400.0;
-					y += 950.0;
-
-					// 				x /= 3.0f;
-					// 				y /= 3.0f;
-
-					x += 1000.0;
-					y += 1000.0;
-
-					// 				x /= 2.0f;
-					// 				y /= 2.0f;
-
 					v.x =
 						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
 										horizontalScale) *
 						verticalScale;
-					float v1 = simplex.Terrain(glm::vec2{(x + dx), y} *
-												   noiseHorizontalScale,
-											   horizontalScale) *
-							   verticalScale;
-					float v2 = simplex.Terrain(glm::vec2{x, (y + dx)} *
-												   noiseHorizontalScale,
-											   horizontalScale) *
-							   verticalScale;
 
-					v.y = (v1 - v.x) / (dx * horizontalScale);
-					v.z = (v2 - v.x) / (dx * horizontalScale);
-					v.x *= sqrt(v.x / verticalScale);
-					// 			v *= verticalScale;
+// 					v.x *= sqrt(v.x / verticalScale);
+// 					v.x = sqrt(v.x * verticalScale);
 					float h = v.x;
-					// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1,
-					// 5);
 					glm::ivec3 c = ColorGradient(
-						_x, _y,
-						v); // glm::clamp(glm::vec3((h+1.0f)*63.0f*1.5f),
-							// glm::vec3(0), glm::vec3(255));
+						_x, _y);
 
 					verts[i] = {h,
 								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
@@ -333,87 +252,5 @@ void ThreadFunction()
 	while (threadsDone.load() < threads.size() + 1) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(60));
 	}
-
-	/*
-	for (int _x1 = 0; _x1 < width; _x1 += 64) {
-		printf("\r p: %5i           ", _x1);
-		fflush(stdout);
-		for (int _y = 0; _y < height; ++_y) {
-			for (int _x2 = 0; _x2 < 64; ++_x2) {
-				int _x = _x1 + _x2;
-				if (_x >= width) {
-					break;
-				}
-
-				float dx = 0.01;
-
-				int i = _x + _y * width;
-				glm::vec3 v;
-				// 			v.x =
-				// wg::Noise::fbm(glm::vec2{x,y}*noiseHorizontalScale, 1, 5) *
-				// verticalScale; 			float v1 =
-				// wg::Noise::fbm(glm::vec2{(x+0.1),y}*noiseHorizontalScale, 1,
-				// 5) * verticalScale; 			float v2 =
-				// wg::Noise::fbm(glm::vec2{x,(y+0.1)}*noiseHorizontalScale, 1,
-				// 5) * verticalScale;
-
-				// 			v.x =
-				// wg::Noise::NoiseV(glm::vec2{x,y}*noiseHorizontalScale) *
-				// verticalScale; 			float v1 =
-				// wg::Noise::NoiseV(glm::vec2{(x+0.1),y}*noiseHorizontalScale)
-				// * verticalScale; 			float v2 =
-				// wg::Noise::NoiseV(glm::vec2{x,(y+0.1)}*noiseHorizontalScale)
-				// * verticalScale;
-
-				float x = _x;
-				float y = _y;
-
-// 				x -= 100.0;
-// 				y -= 100.0;
-
-				// 			x += 115;
-				// 			y += 30;
-				//
-				// 			x += 127;
-				// 			y += 2;
-
-// 				v.x = wg::Noise::Terrain(glm::vec2{x, y} * noiseHorizontalScale,
-// 										 horizontalScale) *
-// 					  verticalScale;
-// 				float v1 = wg::Noise::Terrain(glm::vec2{(x + 0.1), y} *
-// 												  noiseHorizontalScale,
-// 											  horizontalScale) *
-// 						   verticalScale;
-// 				float v2 = wg::Noise::Terrain(glm::vec2{x, (y + 0.1)} *
-// 												  noiseHorizontalScale,
-// 											  horizontalScale) *
-// 						   verticalScale;
-
-				v.x = simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
-										 horizontalScale) *
-					  verticalScale;
-				float v1 = simplex.Terrain(glm::vec2{(x + dx), y} *
-												  noiseHorizontalScale,
-											  horizontalScale) *
-						   verticalScale;
-				float v2 = simplex.Terrain(glm::vec2{x, (y + dx)} *
-												  noiseHorizontalScale,
-											  horizontalScale) *
-						   verticalScale;
-
-				v.y = (v1 - v.x) / (dx * horizontalScale);
-				v.z = (v2 - v.x) / (dx * horizontalScale);
-				// 			v *= verticalScale;
-				float h = v.x;
-				// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1, 5);
-				glm::ivec3 c = ColorGradient(
-					x, y, v); // glm::clamp(glm::vec3((h+1.0f)*63.0f*1.5f),
-							  // glm::vec3(0), glm::vec3(255));
-
-				verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
-			}
-		}
-	}
-*/
 	printf("\r Done!                         \n");
 }

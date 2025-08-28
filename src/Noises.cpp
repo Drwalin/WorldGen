@@ -454,7 +454,7 @@ float SimplexNoise::Noise(glm::vec4 p)
 
 float SimplexNoise::Noise2(glm::vec2 p)
 {
-	return (Noise(p) + Noise(-p+glm::vec2{13,-27}))*0.5f;
+	return CubicFactor(CubicFactor((Noise(p) + Noise(-p+glm::vec2{13,-27}))*0.5f));
 }
 
 float SimplexNoise::Noise2(glm::vec3 p)
