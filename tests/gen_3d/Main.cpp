@@ -1,7 +1,10 @@
-#include <glm/geometric.hpp>
+#include <chrono>
 #include <thread>
+#include <atomic>
 
 #include <glm/fwd.hpp>
+#include <glm/geometric.hpp>
+#include <glm/vector_relational.hpp>
 
 #include "../../../OpenGLWrapper/samples/Camera.hpp"
 #include "../../../OpenGLWrapper/samples/DefaultCameraAndOtherConfig.hpp"
@@ -19,8 +22,8 @@ int width = 500 * 4;
 int height = 500 * 4;
 
 float horizontalScale = 0.04f;
-float verticalScale = 55;
-float noiseHorizontalScale = 0.01f * 0.5 * 0.03;
+float verticalScale = 3;
+float noiseHorizontalScale = 1.0f / 256.0f * 1.5f;
 
 struct Vertex {
 	float h;
@@ -36,7 +39,7 @@ int main(int argc, char **argv)
 
 	// Load shader
 	gl::Shader shader;
-	shader.Load("../tests/gen_3d/vertex.glsl", "",
+	shader.Load("../tests/gen_3d/vertex.glsl", "../tests/gen_3d/geometry.glsl",
 				"../tests/gen_3d/fragment.glsl");
 
 	// TODO: load from argv
@@ -102,7 +105,24 @@ int main(int argc, char **argv)
 	camera.ProcessMouseMovement(175, 50);
 	camera.position = glm::vec3(-25, 65, -25);
 
+	auto beg = std::chrono::steady_clock::now();
+	int frames = 0;
+	float fps = 0;
 	while (!glfwWindowShouldClose(gl::openGL.window)) {
+
+		++frames;
+		if (frames % 50 == 0) {
+			auto now = std::chrono::steady_clock::now();
+			auto dt = now - beg;
+			auto ns = dt.count();
+			auto sec = ns / 1'000'000'000.0;
+			fps = frames / sec;
+			beg = now;
+			frames = 0;
+		}
+		printf("\r    fps: %.2f         ", fps);
+		fflush(stdout);
+
 		DefaultIterationStart();
 
 		{
@@ -177,19 +197,20 @@ glm::ivec3 Color(int x, int y, float h)
 
 glm::ivec3 ColorGradient(int x, int y, glm::vec3 g)
 {
+	thread_local wg::SimplexNoise colorSimplex(12342312);
 	glm::vec3 ga = glm::abs(g);
 	ga.x = 0;
 	float sl = glm::dot(ga, ga);
 	glm::vec3 c;
 
-	float n =
-		((wg::Noise::FractalBrownianMotion(
-			  {x * horizontalScale * 10, 00, y * horizontalScale * 10}, 3) +
-		  1.0f)
-			 .x *
-		 0.5f);
+	float n = colorSimplex.Noise2(glm::vec3{x * 10, 00, y * 10});
+	
+	c = {n,n,n};
+	c = glm::vec3(n * 230.0f);
+	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
+	return c;
 
-	if (sl > 0.3) {
+	if (sl > 0.8) {
 		c = glm::vec3(((n / 2.0f) + 0.5f) * 230.0f);
 		c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
 	} else {
@@ -199,12 +220,12 @@ glm::ivec3 ColorGradient(int x, int y, glm::vec3 g)
 		c.z /= 9.0f;
 	}
 
-	glm::vec2 d{g.y, g.z};
-	glm::vec2 s{0.5, 0.2};
-	s = glm::normalize(s);
-	if (glm::dot(s, d) > 0.001) {
-		c *= 0.7;
-	}
+	// 	glm::vec2 d{g.y, g.z};
+	// 	glm::vec2 s{0.5, 0.2};
+	// 	s = glm::normalize(s);
+	// 	if (glm::dot(s, d) > 0.001) {
+	// 		c *= 0.7;
+	// 	}
 
 	// 	c = glm::vec3(n * 230.0f);
 	// 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
@@ -221,6 +242,99 @@ void ThreadFunction()
 		}
 	}
 
+	wg::SimplexNoise simplex(1234);
+
+	int CHUNK_SIZE = 64;
+
+	std::vector<glm::ivec2> chunks;
+
+	for (int _x = 0; _x < width; _x += CHUNK_SIZE) {
+		for (int _y = 0; _y < height; _y += CHUNK_SIZE) {
+			chunks.push_back({_x, _y});
+		}
+	}
+
+	std::vector<std::thread> threads;
+
+	std::atomic<int> chunkCounter = 0;
+	std::atomic<int> threadsDone = 0;
+
+	auto threadCalcFunc = [&]() {
+		for (;;) {
+			int id = chunkCounter.fetch_add(1);
+			if (id >= chunks.size()) {
+				break;
+			}
+			glm::ivec2 chunk = chunks[id];
+			for (int _y = chunk.y; _y < height && _y < chunk.y + CHUNK_SIZE;
+				 ++_y) {
+				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
+					 ++_x) {
+					constexpr float dx = 0.1;
+					float x = _x;
+					float y = _y;
+					const int i = _x + _y * width;
+					glm::vec3 v;
+
+					x += 400.0;
+					y += 950.0;
+
+					// 				x /= 3.0f;
+					// 				y /= 3.0f;
+
+					x += 1000.0;
+					y += 1000.0;
+
+					// 				x /= 2.0f;
+					// 				y /= 2.0f;
+
+					v.x =
+						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
+										horizontalScale) *
+						verticalScale;
+					float v1 = simplex.Terrain(glm::vec2{(x + dx), y} *
+												   noiseHorizontalScale,
+											   horizontalScale) *
+							   verticalScale;
+					float v2 = simplex.Terrain(glm::vec2{x, (y + dx)} *
+												   noiseHorizontalScale,
+											   horizontalScale) *
+							   verticalScale;
+
+					v.y = (v1 - v.x) / (dx * horizontalScale);
+					v.z = (v2 - v.x) / (dx * horizontalScale);
+					v.x *= sqrt(v.x / verticalScale);
+					// 			v *= verticalScale;
+					float h = v.x;
+					// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1,
+					// 5);
+					glm::ivec3 c = ColorGradient(
+						_x, _y,
+						v); // glm::clamp(glm::vec3((h+1.0f)*63.0f*1.5f),
+							// glm::vec3(0), glm::vec3(255));
+
+					verts[i] = {h,
+								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+				}
+			}
+		}
+		threadsDone++;
+	};
+
+	int threadsCount = std::thread::hardware_concurrency() - 1;
+
+	for (int i = 1; i < threadsCount; ++i) {
+		threads.push_back(std::thread(threadCalcFunc));
+		threads.back().detach();
+	}
+
+	threadCalcFunc();
+
+	while (threadsDone.load() < threads.size() + 1) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(60));
+	}
+
+	/*
 	for (int _x1 = 0; _x1 < width; _x1 += 64) {
 		printf("\r p: %5i           ", _x1);
 		fflush(stdout);
@@ -230,6 +344,9 @@ void ThreadFunction()
 				if (_x >= width) {
 					break;
 				}
+
+				float dx = 0.01;
+
 				int i = _x + _y * width;
 				glm::vec3 v;
 				// 			v.x =
@@ -251,8 +368,8 @@ void ThreadFunction()
 				float x = _x;
 				float y = _y;
 
-				x -= 100.0;
-				y -= 100.0;
+// 				x -= 100.0;
+// 				y -= 100.0;
 
 				// 			x += 115;
 				// 			y += 30;
@@ -260,20 +377,32 @@ void ThreadFunction()
 				// 			x += 127;
 				// 			y += 2;
 
-				v.x = wg::Noise::Terrain(glm::vec2{x, y} * noiseHorizontalScale,
+// 				v.x = wg::Noise::Terrain(glm::vec2{x, y} * noiseHorizontalScale,
+// 										 horizontalScale) *
+// 					  verticalScale;
+// 				float v1 = wg::Noise::Terrain(glm::vec2{(x + 0.1), y} *
+// 												  noiseHorizontalScale,
+// 											  horizontalScale) *
+// 						   verticalScale;
+// 				float v2 = wg::Noise::Terrain(glm::vec2{x, (y + 0.1)} *
+// 												  noiseHorizontalScale,
+// 											  horizontalScale) *
+// 						   verticalScale;
+
+				v.x = simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
 										 horizontalScale) *
 					  verticalScale;
-				float v1 = wg::Noise::Terrain(glm::vec2{(x + 0.1), y} *
+				float v1 = simplex.Terrain(glm::vec2{(x + dx), y} *
 												  noiseHorizontalScale,
 											  horizontalScale) *
 						   verticalScale;
-				float v2 = wg::Noise::Terrain(glm::vec2{x, (y + 0.1)} *
+				float v2 = simplex.Terrain(glm::vec2{x, (y + dx)} *
 												  noiseHorizontalScale,
 											  horizontalScale) *
 						   verticalScale;
 
-				v.y = (v1 - v.x) / (0.1 * horizontalScale);
-				v.z = (v2 - v.x) / (0.1 * horizontalScale);
+				v.y = (v1 - v.x) / (dx * horizontalScale);
+				v.z = (v2 - v.x) / (dx * horizontalScale);
 				// 			v *= verticalScale;
 				float h = v.x;
 				// 			float h = wg::Noise::fbm({x*0.01f,0,y*0.01f}, 1, 5);
@@ -285,5 +414,6 @@ void ThreadFunction()
 			}
 		}
 	}
+*/
 	printf("\r Done!                         \n");
 }

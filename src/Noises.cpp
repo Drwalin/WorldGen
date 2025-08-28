@@ -27,6 +27,7 @@
 namespace wg
 {
 
+/*
 static glm::vec4 cubic(float v)
 {
 	glm::vec4 n = glm::vec4(1.0, 2.0, 3.0, 4.0) - v;
@@ -37,6 +38,7 @@ static glm::vec4 cubic(float v)
 	float w = 6.0 - x - y - z;
 	return glm::vec4(x, y, z, w) * (1.0f / 6.0f);
 }
+*/
 
 static float sinc(float x)
 {
@@ -106,7 +108,7 @@ glm::vec3 Noise::NoiseVG(glm::vec2 uv, int seed)
 {
 	glm::vec2 u = glm::floor(uv);
 	glm::vec2 f = glm::fract(uv);
-	float a= hx::Hash(u, seed);
+	float a = hx::Hash(u, seed);
 	float b = hx::Hash(u + glm::vec2(1.0, 0.0), seed);
 	float c = hx::Hash(u + glm::vec2(0.0, 1.0), seed);
 	float d = hx::Hash(u + glm::vec2(1.0, 1.0), seed);
@@ -118,15 +120,15 @@ glm::vec3 Noise::NoiseVG(glm::vec2 uv, int seed)
 
 	float ffx = CubicDerivative(f.x);
 	float ffy = CubicDerivative(f.y);
-	
-// 	std::swap(a,b);
-// 	std::swap(c,d);
 
-// 	float dx = (b - 1) * ffx * (1 - fy) + (d - c) * ffx * fy;
-// 	float dy = ((c - a) + (d - b + a - c) * fx) * ffy;
+	// 	std::swap(a,b);
+	// 	std::swap(c,d);
 
-		float dx = ffx * ((a - b) - fy * (a - b - c + d));
-		float dy = ffy * (a + c - (a - b + c - d) * fx);
+	// 	float dx = (b - 1) * ffx * (1 - fy) + (d - c) * ffx * fy;
+	// 	float dy = ((c - a) + (d - b + a - c) * fx) * ffy;
+
+	float dx = ffx * ((a - b) - fy * (a - b - c + d));
+	float dy = ffy * (a + c - (a - b + c - d) * fx);
 	return {h, dx, dy};
 }
 
@@ -419,6 +421,104 @@ float Noise::Terrain(glm::vec2 p, float horizontalScale)
 	hr = (hr + hr2 * 0.3) / 1.3;
 	float h = Ridges2(p * 90.0f, horizontalScale * 90, 0.6, 3, 0, 32131);
 	return h * 0.02 + hr * 0.98;
+}
+
+OpenSimplex2F::OpenSimplexEnv *SimplexNoise::ose = OpenSimplex2F::initOpenSimplex();
+
+SimplexNoise::SimplexNoise(uint64_t seed) { osg = nullptr; Init(seed); }
+
+SimplexNoise::~SimplexNoise() { OpenSimplex2F::FreeOSG(osg); }
+
+void SimplexNoise::Init(uint64_t seed)
+{
+	if (osg) {
+		OpenSimplex2F::FreeOSG(osg);
+	}
+	osg = OpenSimplex2F::newOpenSimplexGradients(ose, 822199);
+}
+
+float SimplexNoise::Noise(glm::vec2 p)
+{
+	return (OpenSimplex2F::noise2(ose, osg, p.x, p.y) + 1.0) * 0.5;
+}
+
+float SimplexNoise::Noise(glm::vec3 p)
+{
+	return (OpenSimplex2F::noise3_Classic(ose, osg, p.x, p.y, p.z) + 1.0) * 0.5;
+}
+
+float SimplexNoise::Noise(glm::vec4 p)
+{
+	return (OpenSimplex2F::noise4_Classic(ose, osg, p.x, p.y, p.z, p.w) + 1.0) * 0.5;
+}
+
+float SimplexNoise::Noise2(glm::vec2 p)
+{
+	return (Noise(p) + Noise(-p+glm::vec2{13,-27}))*0.5f;
+}
+
+float SimplexNoise::Noise2(glm::vec3 p)
+{
+	return (Noise(p) + Noise(-p+glm::vec3{13,-27,43}))*0.5f;
+}
+
+float SimplexNoise::Noise2(glm::vec4 p)
+{
+	return (Noise(p) + Noise(-p+glm::vec4{13,-27,43,-51}))*0.5f;
+}
+
+float SimplexNoise::Fbm(glm::vec2 p, int octaves, float attenuation,
+						float coordMultiplier, bool useGrad, bool useNoise2, float verticalScale)
+{
+	float (SimplexNoise::*noise)(glm::vec2) = &SimplexNoise::Noise;
+	if (useNoise2) {
+		noise = &SimplexNoise::Noise2;
+	}
+	
+	glm::vec2 g{0,0};
+	float dx = 0.001;
+	
+	float h = 0;
+	float a = 1;
+	float sum = 0;
+	for (int i=0; i<octaves; ++i) {
+		float h0, h1, h2;
+		h0 = (this->*noise)(p) * a * verticalScale;
+		if (useGrad) {
+			h1 = (this->*noise)(p+glm::vec2{dx,0.0f}) * a * verticalScale;
+			h2 = (this->*noise)(p+glm::vec2{0.0f,dx}) * a * verticalScale;
+			g += (glm::vec2{h1, h2} - h0 ) /dx;
+			h += h0 / (1.0f + glm::dot(g,g));
+		} else {
+			h += h0;
+		}
+		
+		sum += a;
+		p *= coordMultiplier;
+		a *= attenuation;
+	}
+	return h / sum;
+}
+
+float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
+{
+	int octaves = 8;
+	bool useTwo = true;
+	float biome = Noise(-p*0.2f - 321.f);
+	float scale = Noise(p*0.4f + 123.f);
+	float mountains = Fbm(p, octaves, 0.5, 2.3, true, useTwo, scale * 0.6 + 0.4);
+	float plains = Fbm(p*0.3f-100.0f, octaves, 0.5, 2.3, false, useTwo, scale * 0.8 + 0.2);
+	float h;
+	if (biome < 0.25) {
+		h = plains;
+	} else if (biome < 0.50) {
+		float f = (biome - 0.25) / 0.25;
+		f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+		h = plains + f * mountains;
+	} else{
+		h = plains + mountains;
+	}
+	return h;
 }
 
 } // namespace wg
