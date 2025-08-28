@@ -509,10 +509,10 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 	float mountains = Fbm(p, octaves, 0.4, 2.3, true, useTwo, scale * 0.6 + 0.4);
 	float plains = Fbm(p*0.3f-100.0f, octaves, 0.4, 2.3, false, useTwo, scale * 0.8 + 0.2);
 	float h;
-	if (biome < 0.5) {
+	if (biome < 0.25) {
 		h = plains;
-	} else if (biome < 0.75) {
-		float f = (biome - 0.5) / 0.25;
+	} else if (biome < 0.5) {
+		float f = (biome - 0.25) / 0.25;
 		f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 		h = plains + f * mountains;
 	} else{

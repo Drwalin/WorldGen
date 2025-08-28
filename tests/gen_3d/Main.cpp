@@ -19,11 +19,15 @@
 #include "../../include/worldgen/Noises.hpp"
 
 int width = 500 * 4;
-int height = 500 * 4;
+int height = width;
 
-float horizontalScale = 0.04f;
-float verticalScale = 7;
-float noiseHorizontalScale = 1.0f / 256.0f;
+float uniScale = 0.01;
+
+float SCALE = 10;
+
+float horizontalScale = 1.0f * uniScale;
+float verticalScale = 1200.0f * uniScale / SCALE;
+float noiseHorizontalScale = 1.0f / 4000.0f * SCALE;
 
 struct Vertex {
 	float h;
@@ -221,18 +225,20 @@ void ThreadFunction()
 					const int i = _x + _y * width;
 					glm::vec3 v;
 					
-					x += 100;
-					y += 100;
-					
-					y += 500;
+// 					x += 100 + 500;
+// 					y += 100 + 500 + 300;
+// 					
+					y += 750.f / SCALE;
 					
 					x += (simplex.Fbm(glm::vec2(-x/53+100,  y/53-1000), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
 					y += (simplex.Fbm(glm::vec2(+x/53-1000, -y/53+100), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
 
 					v.x =
 						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
-										horizontalScale) *
-						verticalScale;
+										horizontalScale);
+// 					v.x =
+// 						simplex.Noise(glm::vec2{x, y} * noiseHorizontalScale) *
+// 						verticalScale;
 					
 					maxH = std::max(maxH, v.x);
 
