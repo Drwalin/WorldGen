@@ -22,8 +22,8 @@ int width = 500 * 4;
 int height = 500 * 4;
 
 float horizontalScale = 0.04f;
-float verticalScale = 3;
-float noiseHorizontalScale = 1.0f / 256.0f * 1.5f;
+float verticalScale = 7;
+float noiseHorizontalScale = 1.0f / 256.0f;
 
 struct Vertex {
 	float h;
@@ -203,8 +203,9 @@ void ThreadFunction()
 
 	std::atomic<int> chunkCounter = 0;
 	std::atomic<int> threadsDone = 0;
-
+	
 	auto threadCalcFunc = [&]() {
+		float maxH = 0;
 		for (;;) {
 			int id = chunkCounter.fetch_add(1);
 			if (id >= chunks.size()) {
@@ -215,16 +216,25 @@ void ThreadFunction()
 				 ++_y) {
 				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
 					 ++_x) {
-					constexpr float dx = 0.1;
 					float x = _x;
 					float y = _y;
 					const int i = _x + _y * width;
 					glm::vec3 v;
+					
+					x += 100;
+					y += 100;
+					
+					y += 500;
+					
+					x += (simplex.Fbm(glm::vec2(-x/53+100,  y/53-1000), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
+					y += (simplex.Fbm(glm::vec2(+x/53-1000, -y/53+100), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
 
 					v.x =
 						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
 										horizontalScale) *
 						verticalScale;
+					
+					maxH = std::max(maxH, v.x);
 
 // 					v.x *= sqrt(v.x / verticalScale);
 // 					v.x = sqrt(v.x * verticalScale);
@@ -237,6 +247,7 @@ void ThreadFunction()
 				}
 			}
 		}
+		printf("Max height: %.3f\n", maxH);
 		threadsDone++;
 	};
 

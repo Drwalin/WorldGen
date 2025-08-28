@@ -22,13 +22,13 @@ void main()
 
 		if (scale.y * 0.07 > triangleVert0Pos.y) {
 			FragColor = vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
-		} else if (normal.y < 0.9) {
+		} else if (normal.y < 0.98) {
 			FragColor = vec4(out_color.xyz * 0.3 + 0.4, 1);
 		} else {
 			if (scale.y * 0.085 > triangleVert0Pos.y) {
 				FragColor = vec4(out_color.xyz * 0.2 + 0.8, 1);
 				FragColor.b = 0.1;
-			} else if (scale.y * 0.4 < triangleVert0Pos.y) {
+			} else if (scale.y * 0.62 < triangleVert0Pos.y) {
 				FragColor = vec4(out_color.xyz * 0.2 + 0.8, 1);
 			} else {
 				FragColor = vec4(0.1, out_color.x * 0.3 + 0.7, 0.1, 1);
