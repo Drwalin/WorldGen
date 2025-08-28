@@ -12,7 +12,6 @@ in vec3 _in_intPos[3];
 out vec4 out_color;
 out vec3 intPos;
 out vec3 normal;
-out vec3 trueNormal;
 out vec3 pos;
 out vec3 triangleVert0Pos;
 
@@ -22,15 +21,6 @@ void main()
 	vec3 b = _in_pos[1];
 	vec3 c = _in_pos[2];
 	triangleVert0Pos = _in_pos[0];
-
-	vec3 tn = normalize(cross(b - a, c - a));
-	if (tn.y < 0) {
-		tn = -tn;
-	}
-
-	a.y = a.y / scale.y;
-	b.y = b.y / scale.y;
-	c.y = c.y / scale.y;
 
 	vec3 n = normalize(cross(b - a, c - a));
 	if (n.y < 0) {
@@ -43,7 +33,6 @@ void main()
 		out_color = _in_out_color[i];
 		intPos = _in_intPos[i];
 		normal = n;
-		trueNormal = tn;
 		EmitVertex();
 	}
 	EndPrimitive();

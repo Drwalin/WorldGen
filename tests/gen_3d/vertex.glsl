@@ -19,7 +19,7 @@ void main()
 	int x = gl_VertexID % size.x;
 	int z = gl_VertexID / size.x;
 	_in_intPos = vec3(x, height, z);
-	_in_pos = vec3(x * scale.x, height, z * scale.z);
+	_in_pos = vec3(x * scale.x, height * scale.y, z * scale.z);
 	gl_Position = projection * view * model * vec4(_in_pos, 1);
 	_in_out_color = color;
 }
