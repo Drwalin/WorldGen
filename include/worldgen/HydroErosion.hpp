@@ -5,7 +5,6 @@
 #define HYDRO_EROSION_HPP
 
 #include <cstdio>
-#include <cmath>
 
 struct Flux {
 	float L;
@@ -47,24 +46,31 @@ struct Tile {
 		float fluxArray[4];
 	};
 	float vx, vy;
+	float deltaSedimentGround;
 };
 
 struct Grid {
+	void Init(int width, int height) {
+		this->width = width;
+		this->height = height;
+		this->tiles = new Tile[width*height];
+	}
 	Grid() {
 		width = height = 0;
 		tiles = NULL;
-		dt = 0.01;
+		dt = 0.05;
 		crossSectionalAreaOfPipe = 1;
 		gravity = 9.81;
 		tileDimensionSize = 1;
 		
-		depositionConstant = 1;//0.01;
-		sedimentCapacityConstant = 1;//0.5;
+		depositionConstant = 0.25;
+		sedimentCapacityConstant = 0.05;
 		minimumSedimentCapacity = 0.1;
 	}
 	~Grid() {
-		if(tiles)
+		if(tiles) {
 			delete[] tiles;
+		}
 	}
 	Tile* tiles;
 	int width, height;
@@ -112,20 +118,30 @@ struct Grid {
 	template<bool safe>
 	inline float SinusLocalTiltAngle(Tile& t, int x, int y);
 	template<bool safe>
-	inline void ErosionAndDeposition(int x, int y); // 3.3
+	inline void ErosionAndDepositionCalculation(int x, int y); // 3.3
+	template<bool safe>
+	inline void ErosionAndDepositionUpdate(int x, int y); // 3.3
 	
 	template<bool safe>
 	inline void SedimentTransportation(int x, int y); // 3.4
+	template<bool safe>
+	inline void SedimentTransportationUpdate(int x, int y); // 3.4
 	
 	inline float EvaporationRate(int x, int y);
 	template<bool safe>
 	inline void Evaporation(int x, int y); // 3.4
+	template<bool safe>
+	inline void Smooth(int x, int y); // 3.4
+	template<bool safe>
+	inline void SmoothUpdate(int x, int y); // 3.4
 	
 	// to be executed after water increase
 	inline void FullCycle();
 };
 
 #include "HydroErosion.incl.hpp"
+#ifdef HYDRO_EROSION_INCL_HPP
+#endif
 
 #endif
 

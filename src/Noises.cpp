@@ -255,7 +255,7 @@ float Noise::Terrain(glm::vec3 _p)
 	float a = 0.0f;
 	float b = 1.0f;
 	glm::vec2 d = glm::vec2(0.0f, 0.0f);
-	for (int i = 0; i < 15; i++) {
+	for (int i = 0; i < 8; i++) {
 		glm::vec3 n = NoiseD(glm::vec3(p.x, 0, p.y));
 		d += glm::vec2(n.y, n.z);
 		a += b * n.x / (1.0f + dot(d, d));

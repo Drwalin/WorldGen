@@ -16,14 +16,18 @@
 // #include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
 // #include "../../../OpenGLWrapper/include/openglwrapper/BufferAccessor.hpp"
 
+#include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 500 * 4;
+
+int width = 512 * 3 / 2;
 int height = width;
 
 float uniScale = 0.01;
 
 float SCALE = 10;
+
+float HYDRO_EROSION_Y_SCALE = 1000.0f;
 
 float horizontalScale = 1.0f * uniScale;
 float verticalScale = 1200.0f * uniScale / SCALE;
@@ -36,6 +40,10 @@ struct Vertex {
 Vertex *verts;
 
 void ThreadFunction();
+
+volatile float hydroErosionDuration = 0;
+volatile bool updateHeights = true;
+volatile bool updateWaterHeights = false;
 
 int main(int argc, char **argv)
 {
@@ -76,9 +84,17 @@ int main(int argc, char **argv)
 	// Generate vertex data
 	gl::VBO vbo(sizeof(float) + 4 * sizeof(uint8_t), gl::ARRAY_BUFFER,
 				gl::DYNAMIC_DRAW);
-	verts = new Vertex[width * height];
-	vbo.Init(width * height);
-	vbo.Generate(verts, width * height);
+	verts = (Vertex*)vbo.InitMapPersistent(nullptr, width*height, 
+// 					gl::DYNAMIC_STORAGE_BIT |
+					gl::MAP_READ_BIT |
+					gl::MAP_WRITE_BIT
+// 					gl::MAP_PERSISTENT_BIT
+// 					gl::MAP_COHERENT_BIT |
+// 					gl::CLIENT_STORAGE_BIT
+			);
+// 	verts = new Vertex[width * height];
+// 	vbo.Init(width * height);
+// 	vbo.Generate(verts, width * height);
 
 	std::thread(ThreadFunction).detach();
 
@@ -112,8 +128,9 @@ int main(int argc, char **argv)
 	auto beg = std::chrono::steady_clock::now();
 	int frames = 0;
 	float fps = 0;
+	bool disableRender = false;
 	while (!glfwWindowShouldClose(gl::openGL.window)) {
-
+		
 		++frames;
 		if (frames % 50 == 0) {
 			auto now = std::chrono::steady_clock::now();
@@ -124,17 +141,48 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
-		printf("\r    fps: %.2f         ", fps);
+		printf("\r    fps: %.2f         hydro: %.2f ms", fps,
+			   hydroErosionDuration);
 		fflush(stdout);
 
 		DefaultIterationStart();
+		
+		if (gl::openGL.IsKeyDown('U')) {
+			updateHeights = true;
+		}
+		if (gl::openGL.IsKeyDown('I')) {
+			updateWaterHeights = true;
+		}
+		
+		if (gl::openGL.WasKeyPressed('O')) {
+			disableRender = !disableRender;
+		}
 
 		{
-			static int count = 0;
-			++count;
-			if (count % 2 == 0) {
-				vbo.Update(verts, 0, sizeof(Vertex) * width * height);
-			}
+// 			constexpr int div = 32;
+// 			static int count = 0;
+// 			const int n = width * height;
+// 			++count;
+			
+// 			if (count % 32 == 0)
+// 			{
+// 				vbo.Update(verts, 0, n * sizeof(Vertex));
+				
+// 				int mod = count % div;
+// 				int of = (n * mod) / div;
+// 				int ofn = ((n+1) * mod) / div;
+// 				if (ofn >  n) {
+// 					ofn = n;
+// 				}
+// 				int e = ofn - of;
+// 				
+// 				int bof = of * sizeof(Vertex);
+				
+// 				if (mod < 5) {
+// 					vbo.Update(verts + of, bof, e * sizeof(Vertex));
+// 				}
+// 				gl::Finish();
+// 			}
 		}
 
 		// Use shader
@@ -159,9 +207,15 @@ int main(int argc, char **argv)
 		shader.SetMat4(modelLoc, model);
 
 		// Draw VAO
-		vao.Draw();
+		if (disableRender == false) {
+			vao.Draw();
+		}
 
 		DefaultIterationEnd();
+		
+		gl::openGL.PrintErrors();
+		
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 
 	gl::openGL.Destroy();
@@ -175,12 +229,15 @@ glm::ivec3 ColorGradient(int x, int y)
 	thread_local wg::SimplexNoise colorSimplex(12342312);
 
 	float n = colorSimplex.Noise2(glm::vec3{x * 10, 00, y * 10});
-	
-	glm::vec3 c = {n,n,n};
+
+	glm::vec3 c = {n, n, n};
 	c = glm::vec3(n * 230.0f);
 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
 	return c;
 }
+
+void HydroErosionIteration();
+Grid grid;
 
 void ThreadFunction()
 {
@@ -193,7 +250,7 @@ void ThreadFunction()
 
 	wg::SimplexNoise simplex(1234);
 
-	int CHUNK_SIZE = 64;
+	int CHUNK_SIZE = 128;
 
 	std::vector<glm::ivec2> chunks;
 
@@ -207,7 +264,7 @@ void ThreadFunction()
 
 	std::atomic<int> chunkCounter = 0;
 	std::atomic<int> threadsDone = 0;
-	
+
 	auto threadCalcFunc = [&]() {
 		float maxH = 0;
 		for (;;) {
@@ -224,29 +281,34 @@ void ThreadFunction()
 					float y = _y;
 					const int i = _x + _y * width;
 					glm::vec3 v;
-					
-// 					x += 100 + 500;
-// 					y += 100 + 500 + 300;
-// 					
+
+					// 					x += 100 + 500;
+					// 					y += 100 + 500 + 300;
+					//
 					y += 750.f / SCALE;
-					
-					x += (simplex.Fbm(glm::vec2(-x/53+100,  y/53-1000), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
-					y += (simplex.Fbm(glm::vec2(+x/53-1000, -y/53+100), 3, 0.5, 2.3, false, false, 1.0f)-0.5) * 10;
+
+					x += (simplex.Fbm(glm::vec2(-x / 53 + 100, y / 53 - 1000),
+									  3, 0.5, 2.3, false, false, 1.0f) -
+						  0.5) *
+						 10;
+					y += (simplex.Fbm(glm::vec2(+x / 53 - 1000, -y / 53 + 100),
+									  3, 0.5, 2.3, false, false, 1.0f) -
+						  0.5) *
+						 10;
 
 					v.x =
 						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
 										horizontalScale);
-// 					v.x =
-// 						simplex.Noise(glm::vec2{x, y} * noiseHorizontalScale) *
-// 						verticalScale;
-					
+					// 					v.x =
+					// 						simplex.Noise(glm::vec2{x, y} *
+					// noiseHorizontalScale) * 						verticalScale;
+
 					maxH = std::max(maxH, v.x);
 
-// 					v.x *= sqrt(v.x / verticalScale);
-// 					v.x = sqrt(v.x * verticalScale);
+					// 					v.x *= sqrt(v.x / verticalScale);
+					// 					v.x = sqrt(v.x * verticalScale);
 					float h = v.x;
-					glm::ivec3 c = ColorGradient(
-						_x, _y);
+					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
 								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
@@ -257,7 +319,8 @@ void ThreadFunction()
 		threadsDone++;
 	};
 
-	int threadsCount = std::thread::hardware_concurrency() - 1;
+	int threadsCount =
+		std::max(((int)std::thread::hardware_concurrency()) - 2, 1);
 
 	for (int i = 1; i < threadsCount; ++i) {
 		threads.push_back(std::thread(threadCalcFunc));
@@ -270,4 +333,105 @@ void ThreadFunction()
 		std::this_thread::sleep_for(std::chrono::milliseconds(60));
 	}
 	printf("\r Done!                         \n");
+
+	HydroErosionIteration();
+}
+
+void HydroErosionIteration()
+{
+	grid.Init(width, height);
+	wg::SimplexNoise simplex(432127);
+
+	{
+		wg::SimplexNoise simplex(13222);
+		for (int _y = 0; _y < height; ++_y) {
+			for (int _x = 0; _x < width; ++_x) {
+				const float x = _x;
+				const float y = _y;
+				const int i = _x + _y * width;
+				Tile *t = grid.At<false>(_x, _y);
+				t->ground= verts[i].h * HYDRO_EROSION_Y_SCALE;
+				
+				float hardness =
+					(simplex.Fbm(glm::vec2(-x / 53 - 100, y / 53 + 1000), 3,
+								 0.5, 2.3, false, false, 1.0f) -
+					 0.5) *
+					0.01;
+				t->hardness = glm::clamp((hardness * 0.2f) + 0.05f, 0.05f, 0.4f);
+			}
+		}
+	}
+
+	for (int HYDRO_ITER=0;;++HYDRO_ITER) {
+		const auto a = std::chrono::steady_clock::now();
+
+		for (int _y = 0; _y < height; ++_y) {
+			for (int _x = 0; _x < width; ++_x) {
+				const float x = _x;
+				const float y = _y;
+
+				const float rain =
+					simplex.Fbm(glm::vec2(-x / 531 - 100, y / 531 + 1000), 3,
+								 0.5, 2.3, false, false, 1.0f) *
+					(HYDRO_ITER==0 ? 5.0f : 0.1f);
+				
+				if (rain < 0) {
+					printf("rain = %f\n", rain);
+				}
+				
+				grid.At<false>(_x, _y)->water += rain;
+			}
+		}
+// 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		
+		grid.FullCycle();
+		
+// 		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		if (updateHeights) {
+			updateHeights = false;
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+					const int i = _x + _y * width;
+					const Tile *t = grid.At<false>(_x, _y);
+					float h = t->ground;// + t->sediment;
+					h /= HYDRO_EROSION_Y_SCALE;
+					
+					if (h > -10000 && h < 50000) {
+					} else {
+						h = 0;
+					}
+					
+					glm::ivec3 c = ColorGradient(_x, _y);
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+				}
+			}
+		}
+
+		if (updateWaterHeights) {
+			updateWaterHeights = false;
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+					const int i = _x + _y * width;
+					const Tile *t = grid.At<false>(_x, _y);
+					float h = t->water;// + t->ground + t->sediment;
+					h /= HYDRO_EROSION_Y_SCALE;
+					
+					if (h > -10000 && h < 50000) {
+					} else {
+						h = 0;
+					}
+					
+					glm::ivec3 c = ColorGradient(_x, _y);
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+				}
+			}
+		}
+		
+// 		std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+		const auto b = std::chrono::steady_clock::now();
+		hydroErosionDuration =
+			std::chrono::nanoseconds(b - a).count() / 1'000'000.0f;
+	}
 }
