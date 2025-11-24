@@ -39,6 +39,7 @@ volatile long double SUM_MATERIAL = 0;
 struct Vertex {
 	float h;
 	uint8_t rgba[4];
+	float w;
 };
 Vertex *verts;
 
@@ -85,7 +86,7 @@ int main(int argc, char **argv)
 	}
 
 	// Generate vertex data
-	gl::VBO vbo(sizeof(float) + 4 * sizeof(uint8_t), gl::ARRAY_BUFFER,
+	gl::VBO vbo(2 * sizeof(float) + 4 * sizeof(uint8_t), gl::ARRAY_BUFFER,
 				gl::DYNAMIC_DRAW);
 	verts = (Vertex*)vbo.InitMapPersistent(nullptr, width*height, 
 // 					gl::DYNAMIC_STORAGE_BIT |
@@ -108,6 +109,8 @@ int main(int argc, char **argv)
 						 gl::FLOAT, false, 0);
 	vao.SetAttribPointer(vbo, shader.GetAttributeLocation("color"), 4,
 						 gl::UNSIGNED_BYTE, true, 4);
+	vao.SetAttribPointer(vbo, shader.GetAttributeLocation("water"), 1,
+						 gl::FLOAT, false, 8);
 	vao.BindElementBuffer(ebo, gl::DataType::UNSIGNED_INT);
 
 	// Get uniform locations
@@ -247,7 +250,7 @@ void ThreadFunction()
 	for (int x = 0; x < width; ++x) {
 		for (int y = 0; y < height; ++y) {
 			int i = x + y * width;
-			verts[i] = {0, {0, 0, 0, 1}};
+			verts[i] = {0, {0, 0, 0, 1}, 0};
 		}
 	}
 
@@ -314,7 +317,7 @@ void ThreadFunction()
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
-								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, 0};
 				}
 			}
 		}
@@ -353,7 +356,7 @@ void HydroErosionIteration()
 				const float y = _y;
 				const int i = _x + _y * width;
 				Tile *t = grid.At<false>(_x, _y);
-				t->ground= verts[i].h * HYDRO_EROSION_Y_SCALE;
+				t->ground = verts[i].h * HYDRO_EROSION_Y_SCALE;
 				
 				float hardness =
 					(simplex.Fbm(glm::vec2(-x / 53 - 100, y / 53 + 1000), 3,
@@ -417,7 +420,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water};
 				}
 			}
 		}
@@ -428,8 +431,7 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const Tile *t = grid.At<false>(_x, _y);
-// 					float h = t->water;// + t->ground + t->sediment;
-					float h = t->water + t->ground + t->sediment;
+					float h = t->water;// + t->ground + t->sediment;
 // 					float h = t->fluxArray[0];// + t->ground + t->sediment;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
@@ -439,7 +441,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water};
 				}
 			}
 		}

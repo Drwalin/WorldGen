@@ -7,6 +7,7 @@ in vec3 pos;
 in vec3 intPos;
 in vec3 normal;
 in vec3 triangleVert0Pos;
+in float outWater;
 
 out vec4 FragColor;
 
@@ -18,11 +19,13 @@ void main()
 	if ((f.x < factorGrid) || (f.z < factorGrid)) {
 		FragColor = vec4(1, 0, 0, 1);
 	} else {
-
+		/*
 		if (scale.y * 0.07 > triangleVert0Pos.y) {
 			// water
 			FragColor = vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
-		} else if (normal.y < 0.9) {
+		} else
+		*/
+		if (normal.y < 0.9) {
 			// stone
 			FragColor = vec4(out_color.xyz * 0.3 + 0.4, 1);
 		} else {
@@ -38,6 +41,18 @@ void main()
 				FragColor = vec4(0.1, out_color.x * 0.3 + 0.7, 0.1, 1);
 			}
 		}
+		
+		
+		vec4 waterColor =  vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
+		
+		float w = clamp(outWater, 0.0, 1.0);
+		if (w < 0.25) {
+			w *= 10.0;
+			w = sqrt(w);
+			w = sqrt(w);
+			w *= 0.1;
+		}
+		FragColor = mix(FragColor, waterColor, w);
 
 		float light = dot(normal, normalize(vec3(-0.6, -0.1, -0.5)));
 // 		light *= light * light;
