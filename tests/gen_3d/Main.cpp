@@ -20,7 +20,7 @@
 #include "../../include/worldgen/Noises.hpp"
 
 
-int width = 512 * 3 / 2;
+int width = 512;
 int height = width;
 
 float uniScale = 0.01;
@@ -32,6 +32,9 @@ float HYDRO_EROSION_Y_SCALE = 1000.0f;
 float horizontalScale = 1.0f * uniScale;
 float verticalScale = 1200.0f * uniScale / SCALE;
 float noiseHorizontalScale = 1.0f / 4000.0f * SCALE;
+volatile int HYDRO_ITER = 0;
+
+volatile long double SUM_MATERIAL = 0;
 
 struct Vertex {
 	float h;
@@ -141,8 +144,8 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
-		printf("\r    fps: %.2f         hydro: %.2f ms", fps,
-			   hydroErosionDuration);
+		printf("\r    fps: %.2f         (%i) hydro: %.2f ms     mat = %Lf", fps, HYDRO_ITER,
+			   hydroErosionDuration, SUM_MATERIAL);
 		fflush(stdout);
 
 		DefaultIterationStart();
@@ -362,26 +365,37 @@ void HydroErosionIteration()
 		}
 	}
 
-	for (int HYDRO_ITER=0;;++HYDRO_ITER) {
+	for (HYDRO_ITER=0;; HYDRO_ITER = HYDRO_ITER + 1) {
 		const auto a = std::chrono::steady_clock::now();
 
-		for (int _y = 0; _y < height; ++_y) {
-			for (int _x = 0; _x < width; ++_x) {
-				const float x = _x;
-				const float y = _y;
+		long double SUM = 0;
+		
+		if (HYDRO_ITER % 17 == 0) {
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+					const float x = _x;
+					const float y = _y;
 
-				const float rain =
-					simplex.Fbm(glm::vec2(-x / 531 - 100, y / 531 + 1000), 3,
-								 0.5, 2.3, false, false, 1.0f) *
-					(HYDRO_ITER==0 ? 5.0f : 0.1f);
-				
-				if (rain < 0) {
-					printf("rain = %f\n", rain);
+					
+					const float _rain =
+						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
+						*2.0f - 0.5f;
+					
+					const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
+					
+					if (rain < 0) {
+						printf("rain = %f\n", rain);
+					}
+					
+					auto *p = grid.At<false>(_x, _y);
+					
+					p->water += rain;
+					
+					SUM += p->ground + p->sediment;
 				}
-				
-				grid.At<false>(_x, _y)->water += rain;
 			}
 		}
+		SUM_MATERIAL = SUM;
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		
 		grid.FullCycle();
@@ -414,7 +428,9 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const Tile *t = grid.At<false>(_x, _y);
-					float h = t->water;// + t->ground + t->sediment;
+// 					float h = t->water;// + t->ground + t->sediment;
+					float h = t->water + t->ground + t->sediment;
+// 					float h = t->fluxArray[0];// + t->ground + t->sediment;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
 					if (h > -10000 && h < 50000) {

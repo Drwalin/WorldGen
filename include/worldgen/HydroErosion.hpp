@@ -105,7 +105,7 @@ struct Grid {
 	inline Tile* Neighbour(int x, int y, int dir) const;
 	
 	template<bool safe, int dir>
-	inline float CalcFluxInDirection(Tile& src, Tile& neigh) const;
+	inline float CalcFluxInDirection(Tile& src, Tile* neigh) const;
 	inline void LimitFlux(Tile& src);
 	template<bool safe>
 	void CalcOutflux(int x, int y); // 3.2.1

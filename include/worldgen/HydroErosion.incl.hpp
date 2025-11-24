@@ -1,5 +1,6 @@
 
 #include <cmath>
+#include <cassert>
 
 #pragma once
 
@@ -8,27 +9,19 @@
 
 #include "HydroErosion.hpp"
 
-
-#define SAFE_COND_GRID(COND, EXPR) \
-	if constexpr (safe) { \
-		if(COND) { \
-			EXPR; \
-		} \
-	} else { \
-		EXPR; \
-	}
+#include "HydroErosionMacros.hpp"
 
 template<bool safe>
 inline Tile* Grid::At(int x, int y) const {
 	if constexpr(safe) {
-// 		if(x < 0)            return At<true>(width-1, y);//NULL;
-// 		else if(x >= width)  return At<true>(0, y);//NULL;
-// 		if(y < 0)            return At<true>(x, height-1);//NULL;
-// 		else if(y >= height) return At<true>(x, 0);//NULL;
-		if(x < 0)            return NULL;
-		else if(x >= width)  return NULL;
-		if(y < 0)            return NULL;
-		else if(y >= height) return NULL;
+// 		if(x < 0)            return At<true>(width-1, y);//nullptr;
+// 		else if(x >= width)  return At<true>(0, y);//nullptr;
+// 		if(y < 0)            return At<true>(x, height-1);//nullptr;
+// 		else if(y >= height) return At<true>(x, 0);//nullptr;
+		if(x < 0)            return nullptr;
+		else if(x >= width)  return nullptr;
+		if(y < 0)            return nullptr;
+		else if(y >= height) return nullptr;
 	}
 	return (Tile*)(tiles + (x*height + y));
 }
@@ -39,6 +32,7 @@ inline Tile* Grid::Neighbour(int x, int y) const {
 	if constexpr(dir == 1) return At<safe>(x, y+1);
 	if constexpr(dir == 2) return At<safe>(x+1, y);
 	if constexpr(dir == 3) return At<safe>(x, y-1);
+	static_assert(dir >= 0 && dir <= 3);
 }
 
 template<bool safe>
@@ -49,16 +43,16 @@ inline Tile* Grid::Neighbour(int x, int y, int dir) const {
 		case 2: return Neighbour<safe, 2>(x, y);
 		case 3: return Neighbour<safe, 3>(x, y);
 	}
+	assert(dir >= 0 && dir <= 3);
 	// TODO: should not happen
 }
 
 template<bool safe, int dir>
-inline float Grid::CalcFluxInDirection(Tile& src, Tile& neigh) const {
-	Tile* dstp = &neigh;
-	if(dstp == NULL)
+inline float Grid::CalcFluxInDirection(Tile& src, Tile* neigh) const {
+	if(neigh == nullptr)
 		return 0.0f;
-	Tile& dst = *dstp;
-	float dh = (src.b - dst.b) * 4.0f + src.d - dst.d;
+	Tile& dst = *neigh;
+	float dh = (src.b - dst.b) + (src.d - dst.d);
 	float f = src.fluxArray[dir] + dt * A * g * dh / l;
 	if(f < 0.0f)
 		f = 0.0f;
@@ -69,47 +63,32 @@ inline void Grid::LimitFlux(Tile& src) {
 	const float outflux = src.f.L + src.f.B + src.f.R + src.f.T;
 	const float water = src.d * l*l;
 	if(outflux <= 0.001) {
-		src.f.L = 0.0f;
-		src.f.B = 0.0f;
-		src.f.R = 0.0f;
-		src.f.T = 0.0f;
+		FOR_EACH_DIR({src.fluxArray[DIR] = 0.0f;});
 		return;
 	}
 	float K = water / (outflux * dt);
 	if (K > 1.0f) {
 		K = 1.0f;
 	}
-	src.f.L *= K;
-	src.f.B *= K;
-	src.f.R *= K;
-	src.f.T *= K;
+	if (K >= 0.0f) {
+		FOR_EACH_DIR({src.fluxArray[DIR] *= K;});
+	}
 }
 
 template<bool safe>
 void Grid::CalcOutflux(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	Tile* neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
-	SAFE_COND_GRID(neighs[0], (src.fluxArray[0] = CalcFluxInDirection<safe, 0>(src, *(neighs[0]))));
-	SAFE_COND_GRID(neighs[1], (src.fluxArray[1] = CalcFluxInDirection<safe, 1>(src, *(neighs[1]))));
-	SAFE_COND_GRID(neighs[2], (src.fluxArray[2] = CalcFluxInDirection<safe, 2>(src, *(neighs[2]))));
-	SAFE_COND_GRID(neighs[3], (src.fluxArray[3] = CalcFluxInDirection<safe, 3>(src, *(neighs[3]))));
+	NEIGHBOURS(neighs, x, y);
+	
+	FOR_EACH_DIR_SAFE_COND(neighs[DIR], (src.fluxArray[DIR] = CalcFluxInDirection<safe, DIR>(src, neighs[DIR])));
 	LimitFlux(src);
 }
 
 template<bool safe>
 void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
 	float fs = 0;
-	float fsd = 0;
-	SAFE_COND_GRID(neighs[0], (fs += neighs[0]->f.R , fsd += src.f.L));
-	SAFE_COND_GRID(neighs[1], (fs += neighs[1]->f.L , fsd += src.f.R));
-	SAFE_COND_GRID(neighs[2], (fs += neighs[2]->f.T , fsd += src.f.B));
-	SAFE_COND_GRID(neighs[3], (fs += neighs[3]->f.B , fsd += src.f.T));
-	fs -= fsd;
-	src.d += dt/l/l * fs;
+	FOR_EACH_DIR_SAFE_COND(neighs[DIR], fs += neighs[DIR]->fluxArray[R_DIR] - src.fluxArray[DIR]);
+	src.d += (dt/(l*l)) * fs;
 	if (src.d < 0.0f) {
 		src.d = 0;
 	}
@@ -118,11 +97,7 @@ void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
 template<bool safe>
 void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	Tile* neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
+	NEIGHBOURS(neighs, x, y);
 	float water_level = src.d;
 	UpdateWaterLevel<safe>(src, neighs);
 	water_level = (water_level + src.d) * 0.5f;
@@ -150,23 +125,19 @@ void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 template<bool safe>
 inline float Grid::SinusLocalTiltAngle(Tile& t, int x, int y) {
 	float xl, yl;
-	Tile* neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
+	NEIGHBOURS(neighs, x, y);
 	if constexpr (safe) {
 		xl = yl = 2.0f * l;
-		if(neighs[0] == NULL) { neighs[0] = &t; xl = l; }
-		if(neighs[1] == NULL) { neighs[1] = &t; yl = l; }
-		if(neighs[2] == NULL) { neighs[2] = &t; xl = l; }
-		if(neighs[3] == NULL) { neighs[3] = &t; yl = l; }
+		if(neighs[0] == nullptr) { neighs[0] = &t; xl = l; }
+		if(neighs[1] == nullptr) { neighs[1] = &t; yl = l; }
+		if(neighs[2] == nullptr) { neighs[2] = &t; xl = l; }
+		if(neighs[3] == nullptr) { neighs[3] = &t; yl = l; }
 	} else {
 		xl = yl = l;
 	}
 	
 	const float dhdx = (neighs[0]->b - neighs[2]->b) / xl;
-	const float dhdy = (neighs[1]->b - neighs[3]->b)  / yl;
+	const float dhdy = (neighs[1]->b - neighs[3]->b) / yl;
 	
 	const float s = dhdx*dhdx + dhdy*dhdy;
 	
@@ -206,14 +177,14 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 template<bool safe>
 inline void Grid::ErosionAndDepositionUpdate(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	float ds = src.deltaSedimentGround;// * 0.25;
+	float ds = src.deltaSedimentGround * 0.25;
 	src.ground -= ds;
 	src.sediment += ds;
 	src.deltaSedimentGround = 0;
 	
-// 	if (src.sediment < 0.0f) {
-// 		printf("SDUP(%.16f)\n", src.sediment);
-// 	}
+	if (src.sediment < 0.0f) {
+		printf("SDUP(%.16f)\n", src.sediment);
+	}
 }
 
 static inline float SumFlux(const Tile &t) {
@@ -223,53 +194,48 @@ static inline float SumFlux(const Tile &t) {
 template<bool safe>
 inline void Grid::SedimentTransportation(int x, int y) {
 	Tile& src = *At<false>(x, y);
-// 	float sx, sy;
-// 	sx = (x - src.vx*dt)/l;
-// 	sy = (y - src.vy*dt)/l;
-// 	
-// 	int SX = sx;
-// 	int SY = sy;
-// 	
-// 	if(SX < 0)
-// 		return;
-// 	if(SX+1 >= width)
-// 		return;
-// 	if(SY < 0)
-// 		return;
-// 	if(SY+1 >= height)
-// 		return;
-// 	
-// 	Tile& a00 = *At<false>(SX, SY);
-// 	Tile& a10 = *At<false>(SX+1, SY);
-// 	Tile& a11 = *At<false>(SX+1, SY+1);
-// 	Tile& a01 = *At<false>(SX, SY+1);
-// 	
-// 	float rx = sx - SX;
-// 	float ry = sy - SY;
-// 	
-// 	float ds00 = a00.s * (1-rx) * (1-ry);
-// 	float ds10 = a10.s * (rx) * (1-ry);
-// 	float ds01 = a01.s * (1-rx) * (ry);
-// 	float ds11 = a11.s * (rx) * (ry);
-// 	
-// 	a00.s -= ds00;
-// 	a10.s -= ds10;
-// 	a01.s -= ds01;
-// 	a11.s -= ds11;
-// 	
-// 	src.s += ds00 + ds10 + ds01 + ds11;
-	
-	Tile* neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
-	src.deltaSedimentGround = 0;
-	float sum;
-	SAFE_COND_GRID(neighs[0], (sum = SumFlux(*(neighs[0])), src.deltaSedimentGround += sum > 0.0f ? neighs[0]->s * neighs[0]->fluxArray[0] / sum : 0.0f));
-	SAFE_COND_GRID(neighs[1], (sum = SumFlux(*(neighs[1])), src.deltaSedimentGround += sum > 0.0f ? neighs[1]->s * neighs[1]->fluxArray[1] / sum : 0.0f));
-	SAFE_COND_GRID(neighs[2], (sum = SumFlux(*(neighs[2])), src.deltaSedimentGround += sum > 0.0f ? neighs[2]->s * neighs[2]->fluxArray[2] / sum : 0.0f));
-	SAFE_COND_GRID(neighs[3], (sum = SumFlux(*(neighs[3])), src.deltaSedimentGround += sum > 0.0f ? neighs[3]->s * neighs[3]->fluxArray[3] / sum : 0.0f));
+	if constexpr (false) {
+		float sx, sy;
+		sx = (x - src.vx*dt)/l;
+		sy = (y - src.vy*dt)/l;
+		
+		int SX = sx;
+		int SY = sy;
+		
+		if(SX < 0)
+			return;
+		if(SX+1 >= width)
+			return;
+		if(SY < 0)
+			return;
+		if(SY+1 >= height)
+			return;
+		
+		Tile& a00 = *At<false>(SX, SY);
+		Tile& a10 = *At<false>(SX+1, SY);
+		Tile& a11 = *At<false>(SX+1, SY+1);
+		Tile& a01 = *At<false>(SX, SY+1);
+		
+		float rx = sx - SX;
+		float ry = sy - SY;
+		
+		float ds00 = a00.s * (1-rx) * (1-ry);
+		float ds10 = a10.s * (rx) * (1-ry);
+		float ds01 = a01.s * (1-rx) * (ry);
+		float ds11 = a11.s * (rx) * (ry);
+		
+		a00.s -= ds00;
+		a10.s -= ds10;
+		a01.s -= ds01;
+		a11.s -= ds11;
+		
+		src.s += ds00 + ds10 + ds01 + ds11;
+	} else {
+		NEIGHBOURS(neighs, x, y);
+		src.deltaSedimentGround = 0;
+		float sum;
+		FOR_EACH_DIR_SAFE_COND(neighs[DIR], (sum = SumFlux(*(neighs[DIR])), src.deltaSedimentGround += sum > 0.0f ? neighs[DIR]->s * neighs[DIR]->fluxArray[DIR] / sum : 0.0f));
+	}
 }
 
 template<bool safe>
@@ -308,17 +274,10 @@ inline void Grid::Evaporation(int x, int y) {
 template<bool safe>
 inline void Grid::Smooth(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	Tile* neighs[4] = {
-		Neighbour<safe, 0>(x, y),
-		Neighbour<safe, 1>(x, y),
-		Neighbour<safe, 2>(x, y),
-		Neighbour<safe, 3>(x, y) };
-	float sum = src.ground * 12.0f;
-	sum += neighs[0] ? neighs[0]->ground : src.ground;
-	sum += neighs[1] ? neighs[1]->ground : src.ground;
-	sum += neighs[2] ? neighs[2]->ground : src.ground;
-	sum += neighs[3] ? neighs[3]->ground : src.ground;
-	src.deltaSedimentGround = sum / 16.0f;
+	NEIGHBOURS(neighs, x, y);
+	float sum = src.ground * 60.0f;
+	FOR_EACH_DIR(sum += neighs[DIR] ? neighs[DIR]->ground : src.ground);
+	src.deltaSedimentGround = sum / 64.0f;
 }
 
 template<bool safe>
@@ -357,8 +316,8 @@ inline void Grid::FullCycle() {
  	FOR_EACH_SAFE_BORDERS(1, SedimentTransportation);
  	FOR_EACH_SAFE_BORDERS(0, SedimentTransportationUpdate);
  	FOR_EACH_SAFE_BORDERS(0, Evaporation);
-//  	FOR_EACH_SAFE_BORDERS(1, Smooth);
-//  	FOR_EACH_SAFE_BORDERS(0, SmoothUpdate);
+ 	FOR_EACH_SAFE_BORDERS(1, Smooth);
+ 	FOR_EACH_SAFE_BORDERS(0, SmoothUpdate);
 }
 
 #undef SAFE_COND_GRID
