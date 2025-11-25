@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
-		printf("\r    fps: %.2f         (%i) hydro: %.2f ms     mat = %Lf", fps, HYDRO_ITER,
+		printf("\r    fps: %.2f         (%i) hydro: %.2f ms     mat = %Lf                            ", fps, HYDRO_ITER,
 			   hydroErosionDuration, SUM_MATERIAL);
 		fflush(stdout);
 
@@ -363,7 +363,7 @@ void HydroErosionIteration()
 								 0.5, 2.3, false, false, 1.0f) -
 					 0.5) *
 					0.01;
-				t->hardness = glm::clamp((hardness * 0.2f) + 0.05f, 0.05f, 0.4f);
+				t->hardness = glm::clamp((hardness * 0.2f) + 0.01f, 0.01f, 0.2f);
 			}
 		}
 	}
@@ -371,9 +371,8 @@ void HydroErosionIteration()
 	for (HYDRO_ITER=0;; HYDRO_ITER = HYDRO_ITER + 1) {
 		const auto a = std::chrono::steady_clock::now();
 
-		long double SUM = 0;
-		
 		if (HYDRO_ITER % 17 == 0) {
+			long double SUM = 0;
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
 					const float x = _x;
@@ -397,8 +396,8 @@ void HydroErosionIteration()
 					SUM += p->ground + p->sediment;
 				}
 			}
+			SUM_MATERIAL = SUM;
 		}
-		SUM_MATERIAL = SUM;
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		
 		grid.FullCycle();

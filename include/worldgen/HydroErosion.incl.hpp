@@ -107,10 +107,10 @@ void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 		return;
 	}
 	float dWx = 0.0f, dWy = 0.0f;
-	SAFE_COND_GRID(neighs[0], dWx += neighs[0]->f.R - src.f.L);
-	SAFE_COND_GRID(neighs[2], dWx -= neighs[2]->f.L - src.f.R);
-	SAFE_COND_GRID(neighs[1], dWy += neighs[1]->f.T - src.f.B);
-	SAFE_COND_GRID(neighs[3], dWy -= neighs[3]->f.B - src.f.T);
+	SAFE_COND_GRID(neighs[0], dWx -= neighs[0]->fluxArray[2] - src.fluxArray[0]);
+	SAFE_COND_GRID(neighs[1], dWy -= neighs[1]->fluxArray[3] - src.fluxArray[1]);
+	SAFE_COND_GRID(neighs[2], dWx += neighs[2]->fluxArray[0] - src.fluxArray[2]);
+	SAFE_COND_GRID(neighs[3], dWy += neighs[3]->fluxArray[1] - src.fluxArray[3]);
 	src.vx = dWx / (water_level * l);
 	src.vy = dWy / (water_level * l);
 	
@@ -234,7 +234,15 @@ inline void Grid::SedimentTransportation(int x, int y) {
 		NEIGHBOURS(neighs, x, y);
 		src.deltaSedimentGround = 0;
 		float sum;
-		FOR_EACH_DIR_SAFE_COND(neighs[DIR], (sum = SumFlux(*(neighs[DIR])), src.deltaSedimentGround += sum > 0.0f ? neighs[DIR]->s * neighs[DIR]->fluxArray[DIR] / sum : 0.0f));
+		FOR_EACH_DIR_SAFE_COND(neighs[DIR],
+			{
+				sum = SumFlux(*(neighs[DIR]));
+				if (sum > 0.0f) {
+					src.deltaSedimentGround += neighs[DIR]->s * neighs[DIR]->fluxArray[R_DIR] / sum;
+				}
+			});
+// 				(sum = SumFlux(*(neighs[DIR])),
+// 				 src.deltaSedimentGround += sum > 0.0f ? neighs[DIR]->s * neighs[DIR]->fluxArray[DIR] / sum : 0.0f));
 	}
 }
 
@@ -275,9 +283,10 @@ template<bool safe>
 inline void Grid::Smooth(int x, int y) {
 	Tile& src = *At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
-	float sum = src.ground * 60.0f;
+	constexpr float mult = 512;
+	float sum = src.ground * (mult - 4);
 	FOR_EACH_DIR(sum += neighs[DIR] ? neighs[DIR]->ground : src.ground);
-	src.deltaSedimentGround = sum / 64.0f;
+	src.deltaSedimentGround = sum / mult;
 }
 
 template<bool safe>
@@ -309,6 +318,7 @@ constexpr int XDXDX = 4;
 	}
 
 inline void Grid::FullCycle() {
+	++iter;
  	FOR_EACH_SAFE_BORDERS(1, CalcOutflux);
  	FOR_EACH_SAFE_BORDERS(1, UpdateWaterLevelAndVelocity);
  	FOR_EACH_SAFE_BORDERS(1, ErosionAndDepositionCalculation);
@@ -316,8 +326,10 @@ inline void Grid::FullCycle() {
  	FOR_EACH_SAFE_BORDERS(1, SedimentTransportation);
  	FOR_EACH_SAFE_BORDERS(0, SedimentTransportationUpdate);
  	FOR_EACH_SAFE_BORDERS(0, Evaporation);
- 	FOR_EACH_SAFE_BORDERS(1, Smooth);
- 	FOR_EACH_SAFE_BORDERS(0, SmoothUpdate);
+	if (false && iter % 16 == 0) {
+		FOR_EACH_SAFE_BORDERS(1, Smooth);
+		FOR_EACH_SAFE_BORDERS(0, SmoothUpdate);
+	}
 }
 
 #undef SAFE_COND_GRID

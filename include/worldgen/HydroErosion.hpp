@@ -50,6 +50,7 @@ struct Tile {
 };
 
 struct Grid {
+	int iter = 0;
 	void Init(int width, int height) {
 		this->width = width;
 		this->height = height;
@@ -58,14 +59,14 @@ struct Grid {
 	Grid() {
 		width = height = 0;
 		tiles = NULL;
-		dt = 0.05;
-		crossSectionalAreaOfPipe = 1;
+		dt = 0.1;
+		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;
 		
-		depositionConstant = 0.25;
-		sedimentCapacityConstant = 0.05;
-		minimumSedimentCapacity = 0.1;
+		depositionConstant = 0.03;
+		sedimentCapacityConstant = 0.03;
+		minimumSedimentCapacity = 0.1 * 0;
 	}
 	~Grid() {
 		if(tiles) {

@@ -42,7 +42,6 @@ void main()
 			}
 		}
 		
-		
 		vec4 waterColor =  vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
 		
 		float w = clamp(outWater, 0.0, 1.0);
