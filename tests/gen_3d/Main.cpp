@@ -19,8 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-
-int width = 512 * 3 / 2;
+int width = 512 + 64;
 int height = width;
 
 float uniScale = 0.01;
@@ -400,7 +399,8 @@ void HydroErosionIteration()
 		}
 		
 		grid.At<false>(1, 1)->water += 4;
-		grid.At<false>(15, 500)->water += 20;
+		grid.At<false>(1, 1)->water += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+		grid.At<false>(15, 500)->water += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		
 		grid.FullCycle();
@@ -413,7 +413,7 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const Tile *t = grid.At<false>(_x, _y);
-					float h = t->ground;// + t->sediment;
+					float h = t->ground + t->sediment + t->water;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
 					if (h > -10000 && h < 50000) {
