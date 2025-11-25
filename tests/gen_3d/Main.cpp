@@ -20,7 +20,7 @@
 #include "../../include/worldgen/Noises.hpp"
 
 
-int width = 512;
+int width = 512 * 3 / 2;
 int height = width;
 
 float uniScale = 0.01;
@@ -371,7 +371,7 @@ void HydroErosionIteration()
 	for (HYDRO_ITER=0;; HYDRO_ITER = HYDRO_ITER + 1) {
 		const auto a = std::chrono::steady_clock::now();
 
-		if (HYDRO_ITER % 17 == 0) {
+		if (HYDRO_ITER % 11 == 0) {
 			long double SUM = 0;
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
@@ -398,6 +398,9 @@ void HydroErosionIteration()
 			}
 			SUM_MATERIAL = SUM;
 		}
+		
+		grid.At<false>(1, 1)->water += 4;
+		grid.At<false>(15, 500)->water += 20;
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		
 		grid.FullCycle();

@@ -1,8 +1,14 @@
+#pragma once
 
+#include <chrono>
 #include <cmath>
 #include <cassert>
 
-#pragma once
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <functional>
 
 #ifndef HYDRO_EROSION_INCL_HPP
 #define HYDRO_EROSION_INCL_HPP
@@ -231,6 +237,66 @@ inline void Grid::SedimentTransportation(int x, int y) {
 		
 		src.s += ds00 + ds10 + ds01 + ds11;
 	} else {
+		/*
+		src.deltaSedimentGround = 0;
+		
+		Tile *tiles[3][3];
+		for (int X = 0; X <= 2; ++X) {
+			for (int Y = 0; Y <= 2; ++Y) {
+				tiles[X][Y] = At<safe>(x+X-1, y+Y-1);
+			}
+		}
+		
+		for (int _X = 0; _X <= 2; ++_X) {
+			for (int _Y = 0; _Y <= 2; ++_Y) {
+				if (_X == 1 && _Y == 1) {
+					continue;
+				}
+				Tile *t = tiles[_X][_Y];
+				int X = _X+x-1;
+				int Y = _Y+y-1;
+				float vx = t->vx;
+				float vy = t->vy;
+				float avx = vx < 0.0f ? -vx : vx;
+				float avy = vy < 0.0f ? -vy : vy;
+				
+				if (vx * (_X-1.0f) >= 0.0f) {
+					continue;
+				}
+				if (vy * (_Y-1.0f) >= 0.0f) {
+					continue;
+				}
+				
+				if (avx > avy) {
+					
+				} else if (avx == avy) {
+					if (abs(_X-1) == abs(_Y-1)) {
+						continue;
+					}
+					src.deltaSedimentGround += t->sediment;
+					
+					
+				} else {
+					
+				}
+				
+				
+				
+				
+				
+				
+				if (sum > 0.0f) {
+					const float neighSed = neighs[DIR]->s;
+					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
+					src.deltaSedimentGround += neighSed * incomingFlux / sum;
+				}
+				
+			}
+		}
+		*/
+		
+		
+		
 		NEIGHBOURS(neighs, x, y);
 		src.deltaSedimentGround = 0;
 		float sum;
@@ -238,11 +304,11 @@ inline void Grid::SedimentTransportation(int x, int y) {
 			{
 				sum = SumFlux(*(neighs[DIR]));
 				if (sum > 0.0f) {
-					src.deltaSedimentGround += neighs[DIR]->s * neighs[DIR]->fluxArray[R_DIR] / sum;
+					const float neighSed = neighs[DIR]->s;
+					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
+					src.deltaSedimentGround += neighSed * incomingFlux / sum;
 				}
 			});
-// 				(sum = SumFlux(*(neighs[DIR])),
-// 				 src.deltaSedimentGround += sum > 0.0f ? neighs[DIR]->s * neighs[DIR]->fluxArray[DIR] / sum : 0.0f));
 	}
 }
 
@@ -296,7 +362,83 @@ inline void Grid::SmoothUpdate(int x, int y) {
 }
 
 constexpr int XDXDX = 4;
+
+static std::vector<std::thread> threads;
+static std::atomic<int> jobId, jobsDone, jobsTotal;
+static std::function<void(int X)> jobWorker;
+
+template<int BORDER, typename T1, typename T2>
+inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
+{
+	static std::function<void()> singleIteration =
+		[]()
+	{
+		int X = jobId.fetch_add(1);
+		if (X < jobsTotal.load()) {
+			jobWorker(X);
+			jobsDone++;
+		}
+	};
+	{
+		int threadsCount =
+			std::max(((int)std::thread::hardware_concurrency()) - 2, 0);
+		while (threads.size() < threadsCount) {
+			threads.push_back(std::thread(
+						[](){
+						while(true) {
+							if (jobId.load() < jobsTotal.load()) {
+								singleIteration();
+							} else {
+								std::this_thread::sleep_for(std::chrono::milliseconds(1));
+							}
+						}
+						}));
+		}
+	}
+	jobWorker = [&](int X){
+		X = X * XDXDX + BORDER;
+		for(int y=1; y<height-1; ++y) {
+			for (int x=X; x<X+XDXDX && x<width-BORDER; ++x) {
+				funcUnsafe(x, y);
+			}
+		}
+	};
+	jobsDone = 0;
+	jobId = 0;
+	jobsTotal = (width-BORDER*2 + XDXDX - 1) / XDXDX;
+	
+// 	for(int X=BORDER; X<width-BORDER; X+=XDXDX) {
+// 		for(int y=1; y<height-1; ++y) {
+// 			for (int x=X; x<X+XDXDX && x<width-BORDER; ++x) {
+// 				funcUnsafe(x, y);
+// 			}
+// 		}
+// 	}
+	for(int i=BORDER; i<width-BORDER; ++i) {
+		for(int j=0; j<BORDER && j<height/2; ++j) {
+			funcSafe(i, j);
+			funcSafe(i, height-1-j);
+		}
+	}
+	for(int i=0; i<height; ++i) {
+		for(int j=0; j<BORDER && j<width/2; ++j) {
+			funcSafe(j, i);
+			funcSafe(width-1-j, i);
+		}
+	}
+	
+	while (jobsDone.load() < jobsTotal.load()) {
+		singleIteration();
+	}
+	
+	jobsTotal = 0;
+	jobsDone = 0;
+	jobId = 0;
+}
+
 #define FOR_EACH_SAFE_BORDERS(BORDER, FUNC) \
+	ForEachSafeBorders<BORDER>([this](int x, int y){this->FUNC<true>(x, y);}, [this](int x, int y){this->FUNC<false>(x, y);});
+/*
 	for(int X=BORDER; X<width-BORDER; X+=XDXDX) { \
 		for(int y=1; y<height-1; ++y) { \
 			for (int x=X; x<X+XDXDX && x<width-BORDER; ++x) { \
@@ -316,6 +458,7 @@ constexpr int XDXDX = 4;
 			FUNC<true>(width-1-j, i); \
 		} \
 	}
+	*/
 
 inline void Grid::FullCycle() {
 	++iter;

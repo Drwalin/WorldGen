@@ -135,6 +135,9 @@ struct Grid {
 	inline void Smooth(int x, int y); // 3.4
 	template<bool safe>
 	inline void SmoothUpdate(int x, int y); // 3.4
+
+	template<int BORDER, typename T1, typename T2>
+	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
 	
 	// to be executed after water increase
 	inline void FullCycle();
