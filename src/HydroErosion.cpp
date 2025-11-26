@@ -19,7 +19,7 @@ inline float Grid::CalcFluxInDirection(int src, int neigh) const {
 	if(neigh == 0)
 		return 0.0f;
 	int dst = neigh;
-	float dh = (ground[src] - ground[dst]) + (sediment[src] - sediment[dst]) + (water[src] - water[dst]);
+	float dh = (ground[src].Total() - ground[dst].Total()) + (sediment[src] - sediment[dst]) + (water[src] - water[dst]);
 	float f = flux[src].fluxArray[dir] + dt * A * g * dh / l;
 	if(f < 0.0f)
 		f = 0.0f;
@@ -103,8 +103,8 @@ inline float Grid::SinusLocalTiltAngle(int t, int x, int y) {
 		xl = yl = l;
 	}
 	
-	const float dhdx = (ground[neighs[0]] - ground[neighs[2]]) / xl;
-	const float dhdy = (ground[neighs[1]] - ground[neighs[3]]) / yl;
+	const float dhdx = (ground[neighs[0]].Total() - ground[neighs[2]].Total()) / xl;
+	const float dhdy = (ground[neighs[1]].Total() - ground[neighs[3]].Total()) / yl;
 	const float s = dhdx*dhdx + dhdy*dhdy;
 	return sqrt(s) / sqrt(1.0f + s);
 }
@@ -120,11 +120,17 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 	if (capacity > 1.0f)
 		capacity = 1.0f;
 	
-	const float delta = capacity - sediment[src];
+	const float delta = (capacity - sediment[src]) * dt;
 	
 	if(capacity > sediment[src]) {
 		// picking up sediment
-		deltaSedimentGround[src] = hardness[src] * delta;
+		float f = hardness[1] * delta;
+		float l1 = ground[src][1];
+		if (f > ground[src][1]) {
+			float f2 = (f - l1) * hardness[0] / hardness[1];
+			f = ground[src][1] + f2;
+		}
+		deltaSedimentGround[src] = f;
 		if (sediment[src] + deltaSedimentGround[src] < 0.0f && sediment[src] >= 0.0f) {
 			printf(" PICK cap = %f   sed = %f    srcDelta = %f     delta = %f     result = %f\n", capacity,
 					sediment[src], deltaSedimentGround[src], delta, sediment[src] + deltaSedimentGround[src]);
@@ -142,8 +148,8 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 template<bool safe>
 inline void Grid::ErosionAndDepositionUpdate(int x, int y) {
 	int src = At<false>(x, y);
-	float ds = deltaSedimentGround[src] * dt;
-	ground[src] -= ds;
+	float ds = deltaSedimentGround[src];
+	ground[src].AddGeneral(-ds);
 	sediment[src] += ds;
 	deltaSedimentGround[src] = 0;
 	
@@ -341,10 +347,10 @@ inline void Grid::SedimentTransportation(int x, int y) {
 		const float ds01 = a01 == 0 ? 0.0f : capacity * (1.0f-rx) * (ry);
 		const float ds11 = a11 == 0 ? 0.0f : capacity * (rx) * (ry);
 		
-		if (a00) { ground[a00] -= ds00; ground[src] += ds00; }
-		if (a10) { ground[a10] -= ds10; ground[src] += ds10; }
-		if (a01) { ground[a01] -= ds01; ground[src] += ds01; }
-		if (a11) { ground[a11] -= ds11; ground[src] += ds11; }
+		if (a00) { ground[a00].AddGeneral(-ds00); ground[src][1] += ds00; }
+		if (a10) { ground[a10].AddGeneral(-ds10); ground[src][1] += ds10; }
+		if (a01) { ground[a01].AddGeneral(-ds01); ground[src][1] += ds01; }
+		if (a11) { ground[a11].AddGeneral(-ds11); ground[src][1] += ds11; }
 	} break;
 	case 5: {
 		NEIGHBOURS(neighs, x, y);
@@ -412,15 +418,15 @@ inline void Grid::Smooth(int x, int y) {
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	constexpr float mult = 128;
-	float sum = ground[src] * (mult - 4);
-	FOR_EACH_DIR(sum += neighs[DIR] ? ground[neighs[DIR]] : ground[src]);
+	float sum = ground[src].Total() * (mult - 4);
+	FOR_EACH_DIR(sum += neighs[DIR] ? ground[neighs[DIR]].Total() : ground[src].Total());
 	deltaSedimentGround[src] = sum / mult;
 }
 
 template<bool safe>
 inline void Grid::SmoothUpdate(int x, int y) {
 	int src = At<false>(x, y);
-	ground[src] = deltaSedimentGround[src];
+	ground[src].AddGeneral(deltaSedimentGround[src] - ground[src].Total());
 }
 
 template<bool safe>

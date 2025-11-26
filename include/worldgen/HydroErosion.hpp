@@ -33,21 +33,32 @@ struct Velocity {
 	float x = 0.0f, y = 0.0f;
 };
 
+struct GroundLayers {
+	float layers[2] = {0.0f, 0.0f};
+	float &operator[](int layer) { return layers[layer]; }
+	float operator[](int layer) const { return layers[layer]; }
+	inline float Total() const { return layers[0] + layers[1]; }
+	inline void AddGeneral(float dv) {
+		layers[1] += dv;
+		if (layers[1] < 0.0f) {
+			layers[0] += layers[1];
+			layers[1] = 0.0f;
+		}
+	}
+};
+
 struct Grid {
 	int iter = 0;
 	void Init(int width, int height) {
 		this->width = width;
 		this->height = height;
-		ground = new float[width*height] - 1;
+		ground = new GroundLayers[width*height] - 1;
 		water = new float[width*height] - 1;
 		sediment = new float[width*height] - 1;
-		hardness = new float[width*height] - 1;
 		deltaSedimentGround = new float[width*height] - 1;
 		for (int i=1; i<=width*height; ++i) {
-			ground[i] = 0.0f;
 			water[i] = 0.0f;
 			sediment[i] = 0.0f;
-			hardness[i] = 0.1f;
 			deltaSedimentGround[i] = 0.0f;
 		}
 		velocity = new Velocity[width*height] - 1;
@@ -69,15 +80,14 @@ struct Grid {
 		if (ground) { delete[] ground; }
 		if (water) { delete[] water; }
 		if (sediment) { delete[] sediment; }
-		if (hardness) { delete[] hardness; }
 		if (deltaSedimentGround) { delete[] deltaSedimentGround; }
 		if (velocity) { delete[] velocity; }
 		if (flux) { delete[] flux; }
 	}
 	
 	union {
-		float *b = nullptr;
-		float *ground;
+		GroundLayers *b = nullptr;
+		GroundLayers *ground;
 	};
 	union {
 		float *water = nullptr;
@@ -88,10 +98,11 @@ struct Grid {
 		float *suspendedSediment;
 		float *s;
 	};
+	
 	union {
-		float *hardness = nullptr;
-		float *Ks;
-		float *dissolvingConstant;
+		float hardness[2] = {0.2, 0.1};
+		float Ks[2];
+		float dissolvingConstant[2];
 	};
 	float *deltaSedimentGround = nullptr;
 	Velocity *velocity = nullptr;

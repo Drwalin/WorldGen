@@ -19,7 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 * 5;
+int width = 512 + 64;
 int height = width;
 
 float uniScale = 0.01;
@@ -367,18 +367,9 @@ void HydroErosionIteration()
 		wg::SimplexNoise simplex(13222);
 		for (int _y = 0; _y < height; ++_y) {
 			for (int _x = 0; _x < width; ++_x) {
-				const float x = _x;
-				const float y = _y;
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t] = verts[i].h * HYDRO_EROSION_Y_SCALE;
-				
-				float hardness =
-					(simplex.Fbm(glm::vec2(-x / 53 - 100, y / 53 + 1000), 3,
-								 0.5, 2.3, false, false, 1.0f) -
-					 0.5) *
-					0.01;
-				grid.hardness[t] = glm::clamp((hardness * 0.2f) + 0.01f, 0.01f, 0.2f);
+				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE;
 			}
 		}
 	}
@@ -390,10 +381,10 @@ void HydroErosionIteration()
 			long double SUM = 0;
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
+					/*
 					const float x = _x;
 					const float y = _y;
 
-					/*
 					const float _rain =
 						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
 						*2.0f - 0.5f;
@@ -409,7 +400,7 @@ void HydroErosionIteration()
 					
 					grid.water[p] += 0.001f * (HYDRO_ITER < 100 ? 50 : 1);//rain;
 					
-					SUM += grid.ground[p] + grid.sediment[p];
+					SUM += grid.ground[p][0] + grid.sediment[p];
 				}
 			}
 			SUM_MATERIAL = SUM;
@@ -434,7 +425,7 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const int t = grid.At<false>(_x, _y);
-					float h = grid.ground[t];// + grid.water[t] + grid.sediment[i];
+					float h = grid.ground[t][0];// + grid.water[t] + grid.sediment[i];
 // 					float h = t->sediment;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
@@ -455,8 +446,8 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const int t = grid.At<false>(_x, _y);
-					float h = grid.water[t];// + grid.ground[t] + grid.sediment[i];
-// 					float h = grid.flux[t].fluxArray[0];// + grid.ground[t] + grid.sediment[i];
+					float h = grid.ground[t].Total();//grid.water[t];// + grid.ground[t].Total() + grid.sediment[i];
+// 					float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[i];
 					h /= HYDRO_EROSION_Y_SCALE;
 					
 					if (h > -10000 && h < 50000) {
