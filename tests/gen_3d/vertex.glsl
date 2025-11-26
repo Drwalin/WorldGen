@@ -7,7 +7,7 @@ layout(location = 2) in float water;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-uniform vec3 renderScaleVec = vec3(1,6,1);
+uniform vec3 renderScaleVec = vec3(1,1,1);
 uniform int useWater = 0;
 
 uniform ivec2 size;

@@ -10,7 +10,7 @@
 	}
 
 #define NEIGHBOURS(VAR_NAME, X, Y) \
-	Tile* VAR_NAME[4] = { \
+	int VAR_NAME[4] = { \
 		Neighbour<safe, 0>(X, Y), \
 		Neighbour<safe, 1>(X, Y), \
 		Neighbour<safe, 2>(X, Y), \

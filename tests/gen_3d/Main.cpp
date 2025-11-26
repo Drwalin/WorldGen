@@ -19,7 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 + 64;
+int width = 512 * 5;
 int height = width;
 
 float uniScale = 0.01;
@@ -32,6 +32,7 @@ float horizontalScale = 1.0f * uniScale;
 float verticalScale = 1200.0f * uniScale / SCALE;
 float noiseHorizontalScale = 1.0f / 4000.0f * SCALE;
 volatile int HYDRO_ITER = 0;
+volatile float averageHydroIterationDuration = 0.0f;
 
 volatile long double SUM_MATERIAL = 0;
 
@@ -149,8 +150,8 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
-		printf("\r    fps: %.2f         (%i) hydro: %.2f ms     mat = %Lf                            ", fps, HYDRO_ITER,
-			   hydroErosionDuration, SUM_MATERIAL);
+		printf("\r    fps: %.2f         (%i) hydro: %6.2f ms  (%6.2f ms)     mat = %Lf                            ", fps, HYDRO_ITER,
+			   hydroErosionDuration, averageHydroIterationDuration, SUM_MATERIAL);
 		fflush(stdout);
 
 		DefaultIterationStart();
@@ -327,7 +328,7 @@ void ThreadFunction()
 
 					// 					v.x *= sqrt(v.x / verticalScale);
 					// 					v.x = sqrt(v.x * verticalScale);
-					float h = v.x;
+					float h = v.x * 3.0f;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
@@ -369,15 +370,15 @@ void HydroErosionIteration()
 				const float x = _x;
 				const float y = _y;
 				const int i = _x + _y * width;
-				Tile *t = grid.At<false>(_x, _y);
-				t->ground = verts[i].h * HYDRO_EROSION_Y_SCALE;
+				int t = grid.At<false>(_x, _y);
+				grid.ground[t] = verts[i].h * HYDRO_EROSION_Y_SCALE;
 				
 				float hardness =
 					(simplex.Fbm(glm::vec2(-x / 53 - 100, y / 53 + 1000), 3,
 								 0.5, 2.3, false, false, 1.0f) -
 					 0.5) *
 					0.01;
-				t->hardness = glm::clamp((hardness * 0.2f) + 0.01f, 0.01f, 0.2f);
+				grid.hardness[t] = glm::clamp((hardness * 0.2f) + 0.01f, 0.01f, 0.2f);
 			}
 		}
 	}
@@ -392,7 +393,7 @@ void HydroErosionIteration()
 					const float x = _x;
 					const float y = _y;
 
-					
+					/*
 					const float _rain =
 						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
 						*2.0f - 0.5f;
@@ -402,22 +403,23 @@ void HydroErosionIteration()
 					if (rain < 0) {
 						printf("rain = %f\n", rain);
 					}
+					*/
 					
-					auto *p = grid.At<false>(_x, _y);
+					int p = grid.At<false>(_x, _y);
 					
-					p->water += rain;
+					grid.water[p] += 0.001f * (HYDRO_ITER < 100 ? 50 : 1);//rain;
 					
-					SUM += p->ground + p->sediment;
+					SUM += grid.ground[p] + grid.sediment[p];
 				}
 			}
 			SUM_MATERIAL = SUM;
 		}
 		
-		grid.At<false>(1, 1)->water += 4;
-		grid.At<false>(1, 1)->water += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+		grid.water[grid.At<false>(1, 1)] += 4;
+		grid.water[grid.At<false>(1, 1)] += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
 		for (int _y = 13; _y < 18; ++_y) {
 			for (int _x = 498; _x < 503; ++_x) {
-				grid.At<false>(15, 500)->water += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
+				grid.water[grid.At<false>(15, 500)] += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
 			}
 		}
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -431,8 +433,8 @@ void HydroErosionIteration()
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
-					const Tile *t = grid.At<false>(_x, _y);
-					float h = t->ground;// + t->water + t->sediment;
+					const int t = grid.At<false>(_x, _y);
+					float h = grid.ground[t];// + grid.water[t] + grid.sediment[i];
 // 					float h = t->sediment;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
@@ -442,7 +444,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water / HYDRO_EROSION_Y_SCALE};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, grid.water[t] / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
@@ -452,9 +454,9 @@ void HydroErosionIteration()
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
-					const Tile *t = grid.At<false>(_x, _y);
-					float h = t->water;// + t->ground + t->sediment;
-// 					float h = t->fluxArray[0];// + t->ground + t->sediment;
+					const int t = grid.At<false>(_x, _y);
+					float h = grid.water[t];// + grid.ground[t] + grid.sediment[i];
+// 					float h = grid.flux[t].fluxArray[0];// + grid.ground[t] + grid.sediment[i];
 					h /= HYDRO_EROSION_Y_SCALE;
 					
 					if (h > -10000 && h < 50000) {
@@ -463,7 +465,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water / HYDRO_EROSION_Y_SCALE};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, grid.water[t] / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
@@ -473,5 +475,16 @@ void HydroErosionIteration()
 		const auto b = std::chrono::steady_clock::now();
 		hydroErosionDuration =
 			std::chrono::nanoseconds(b - a).count() / 1'000'000.0f;
+		if (HYDRO_ITER < 10) {
+			averageHydroIterationDuration = hydroErosionDuration;
+		} else if (HYDRO_ITER < 50) {
+			averageHydroIterationDuration = std::min(hydroErosionDuration,
+					averageHydroIterationDuration);
+		} else {
+			averageHydroIterationDuration =
+				0.98f * averageHydroIterationDuration
+				+
+				0.02f * hydroErosionDuration;
+		}
 	}
 }

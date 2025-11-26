@@ -3,8 +3,6 @@
 #ifndef HYDRO_EROSION_HPP
 #define HYDRO_EROSION_HPP
 
-#include <cstdio>
-
 /*
  * Angles of repose:
  *    dry sand: 34*
@@ -21,40 +19,18 @@ struct Flux {
 	float T;
 };
 
-struct Tile {
-	Tile() {
-		ground = 0;
-		water = 0;
-		sediment = 0;
+struct FluxUnion {
+	FluxUnion() {
 		f.L = f.B = f.R = f.T = 0;
-		vx = vy = 0;
-		
-		hardness = 0.1;
 	}
-	union {
-		float b;
-		float ground;
-	};
-	union {
-		float water;
-		float d;
-	};
-	union {
-		float sediment;
-		float suspendedSediment;
-		float s;
-	};
-	union {
-		float hardness;
-		float Ks;
-		float dissolvingConstant;
-	};
 	union {
 		Flux f;
 		float fluxArray[4];
 	};
-	float vx, vy;
-	float deltaSedimentGround;
+};
+
+struct Velocity {
+	float x = 0.0f, y = 0.0f;
 };
 
 struct Grid {
@@ -62,11 +38,24 @@ struct Grid {
 	void Init(int width, int height) {
 		this->width = width;
 		this->height = height;
-		this->tiles = new Tile[width*height];
+		ground = new float[width*height] - 1;
+		water = new float[width*height] - 1;
+		sediment = new float[width*height] - 1;
+		hardness = new float[width*height] - 1;
+		deltaSedimentGround = new float[width*height] - 1;
+		for (int i=1; i<=width*height; ++i) {
+			ground[i] = 0.0f;
+			water[i] = 0.0f;
+			sediment[i] = 0.0f;
+			hardness[i] = 0.1f;
+			deltaSedimentGround[i] = 0.0f;
+		}
+		velocity = new Velocity[width*height] - 1;
+		flux = new FluxUnion[width*height] - 1;
+		
 	}
 	Grid() {
 		width = height = 0;
-		tiles = NULL;
 		dt = 0.02;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
@@ -77,11 +66,38 @@ struct Grid {
 		minimumSedimentCapacity = 0.1 * 0;
 	}
 	~Grid() {
-		if(tiles) {
-			delete[] tiles;
-		}
+		if (ground) { delete[] ground; }
+		if (water) { delete[] water; }
+		if (sediment) { delete[] sediment; }
+		if (hardness) { delete[] hardness; }
+		if (deltaSedimentGround) { delete[] deltaSedimentGround; }
+		if (velocity) { delete[] velocity; }
+		if (flux) { delete[] flux; }
 	}
-	Tile* tiles;
+	
+	union {
+		float *b = nullptr;
+		float *ground;
+	};
+	union {
+		float *water = nullptr;
+		float *d;
+	};
+	union {
+		float *sediment = nullptr;
+		float *suspendedSediment;
+		float *s;
+	};
+	union {
+		float *hardness = nullptr;
+		float *Ks;
+		float *dissolvingConstant;
+	};
+	float *deltaSedimentGround = nullptr;
+	Velocity *velocity = nullptr;
+	FluxUnion *flux = nullptr;
+	
+	
 	int width, height;
 	float dt;
 	union {
@@ -107,25 +123,25 @@ struct Grid {
 	float minimumSedimentCapacity;
 	
 	template<bool safe>
-	inline Tile* At(int x, int y) const;
+	inline int At(int x, int y) const;
 	template<bool safe, int dir>
-	inline Tile* Neighbour(int x, int y) const;
+	inline int Neighbour(int x, int y) const;
 	template<bool safe>
-	inline Tile* Neighbour(int x, int y, int dir) const;
+	inline int Neighbour(int x, int y, int dir) const;
 	
 	template<bool safe, int dir>
-	inline float CalcFluxInDirection(Tile& src, Tile* neigh) const;
-	inline void LimitFlux(Tile& src);
+	inline float CalcFluxInDirection(int src, int neigh) const;
+	inline void LimitFlux(int src);
 	template<bool safe>
 	void CalcOutflux(int x, int y); // 3.2.1
 	
 	template<bool safe>
-	void UpdateWaterLevel(Tile& src, Tile** neighs);
+	void UpdateWaterLevel(int src, int* neighs);
 	template<bool safe>
 	void UpdateWaterLevelAndVelocity(int x, int y); // 3.2.2
 	
 	template<bool safe>
-	inline float SinusLocalTiltAngle(Tile& t, int x, int y);
+	inline float SinusLocalTiltAngle(int t, int x, int y);
 	template<bool safe>
 	inline void ErosionAndDepositionCalculation(int x, int y); // 3.3
 	template<bool safe>
@@ -148,6 +164,8 @@ struct Grid {
 
 	template<int BORDER, bool PARALLEL, typename T1, typename T2>
 	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
+	
+	inline float SumFlux(int t);
 	
 	// to be executed after water increase
 	void FullCycle();
