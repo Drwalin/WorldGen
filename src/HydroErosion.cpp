@@ -161,7 +161,7 @@ static inline float SumFlux(const Tile &t) {
 template<bool safe>
 inline void Grid::SedimentTransportation(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	switch(3) {
+	switch(5) {
 	case 0: {
 		const float sx = (x - src.vx*dt)/l;
 		const float sy = (y - src.vy*dt)/l;
@@ -329,6 +329,51 @@ inline void Grid::SedimentTransportation(int x, int y) {
 		
 		src.deltaSedimentGround = (ds00 + ds10 + ds01 + ds11);
 	} break;
+	case 4: {
+		const float sx = (x - src.vx*dt)/l;
+		const float sy = (y - src.vy*dt)/l;
+		const float vel = sqrt(src.vx*src.vx + src.vy*src.vy);
+		const float capFactor = (vel - 1.0f) * 0.001f * dt;
+		if (capFactor < 0.0f) {
+			break;
+		}
+		const float capacity = capFactor > 0.1f ? 0.1f : capFactor;
+		
+		const int SX = floor(sx);
+		const int SY = floor(sy);
+		
+		Tile *a00 = At<safe>(SX, SY);
+		Tile *a10 = At<safe>(SX+1, SY);
+		Tile *a11 = At<safe>(SX+1, SY+1);
+		Tile *a01 = At<safe>(SX, SY+1);
+		
+		const float rx = sx - SX;
+		const float ry = sy - SY;
+		
+		const float ds00 = a00 == nullptr ? 0.0f : capacity * (1.0f-rx) * (1.0f-ry);
+		const float ds10 = a10 == nullptr ? 0.0f : capacity * (rx) * (1.0f-ry);
+		const float ds01 = a01 == nullptr ? 0.0f : capacity * (1.0f-rx) * (ry);
+		const float ds11 = a11 == nullptr ? 0.0f : capacity * (rx) * (ry);
+		
+		if (a00) { a00->ground -= ds00; src.ground += ds00; }
+		if (a10) { a10->ground -= ds10; src.ground += ds10; }
+		if (a01) { a01->ground -= ds01; src.ground += ds01; }
+		if (a11) { a11->ground -= ds11; src.ground += ds11; }
+	} break;
+	case 5: {
+		NEIGHBOURS(neighs, x, y);
+		FOR_EACH_DIR_SAFE_COND(neighs[DIR],
+			{
+				const float sum = SumFlux(*(neighs[DIR]));
+				if (sum > 0.0f) {
+					const float neighSed = neighs[DIR]->s;
+					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
+					const float dV = dt * neighSed * incomingFlux / sum;
+					src.deltaSedimentGround += dV;
+					neighs[DIR]->deltaSedimentGround -= dV;
+				}
+			});
+	} break;
 	}
 }
 
@@ -350,14 +395,14 @@ inline void Grid::SedimentTransportationUpdate(int x, int y) {
 // 	if (f > 0.0f) {
 // 		src.s = src.deltaSedimentGround;
 // 	} else {
-		src.s += src.deltaSedimentGround;
+		src.sediment += src.deltaSedimentGround;
 // 	}
 	src.deltaSedimentGround = 0;
 	
 	
-	if (src.sediment < 0.0f) {
-		printf("SDUP2(%.16f)\n", src.sediment);
-	}
+// 	if (src.sediment < 0.0f) {
+// 		printf("SDUP2(%.16f)\n", src.sediment);
+// 	}
 }
 
 inline float Grid::EvaporationRate(int x, int y) {
@@ -481,15 +526,15 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 
 void Grid::FullCycle() {
 	++iter;
- 	FOR_EACH_SAFE_BORDERS(1, true, CalcOutflux);
- 	FOR_EACH_SAFE_BORDERS(1, true, UpdateWaterLevelAndVelocity);
- 	FOR_EACH_SAFE_BORDERS(1, true, ErosionAndDepositionCalculation);
- 	FOR_EACH_SAFE_BORDERS(0, true, ErosionAndDepositionUpdate);
- 	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
- 	FOR_EACH_SAFE_BORDERS(12, false, SedimentTransportation);
- 	FOR_EACH_SAFE_BORDERS(0, false, SedimentTransportationUpdate);
- 	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
-	if (true && iter % 1 == 0) {
+	FOR_EACH_SAFE_BORDERS(1, true, CalcOutflux);
+	FOR_EACH_SAFE_BORDERS(1, true, UpdateWaterLevelAndVelocity);
+	FOR_EACH_SAFE_BORDERS(1, true, ErosionAndDepositionCalculation);
+	FOR_EACH_SAFE_BORDERS(0, true, ErosionAndDepositionUpdate);
+	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
+	FOR_EACH_SAFE_BORDERS(12, false, SedimentTransportation);
+	FOR_EACH_SAFE_BORDERS(0, false, SedimentTransportationUpdate);
+	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
+	if (false && iter % 1 == 0) {
 		FOR_EACH_SAFE_BORDERS(1, true, Smooth);
 		FOR_EACH_SAFE_BORDERS(0, true, SmoothUpdate);
 	}

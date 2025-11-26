@@ -1,6 +1,7 @@
 #version 430 core
 
 uniform vec3 scale;
+uniform int useWater = 0;
 
 in vec4 out_color;
 in vec3 pos;
@@ -15,6 +16,15 @@ const float factorGrid = 0.0;
 
 void main()
 {
+	vec4 colorSand = vec4(out_color.xyz * 0.2 + 0.8, 1);
+	colorSand.b = 0.1;
+	vec4 colorStone = vec4(out_color.xyz * 0.3 + 0.4, 1);
+	vec4 colorSnow = vec4(out_color.xyz * 0.2 + 0.8, 1);
+	vec4 colorGrass = vec4(0.1, out_color.x * 0.3 + 0.7, 0.1, 1);
+	vec4 colorWater = vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
+	
+	
+	
 	vec3 f = fract(intPos);
 	if ((f.x < factorGrid) || (f.z < factorGrid)) {
 		FragColor = vec4(1, 0, 0, 1);
@@ -27,31 +37,40 @@ void main()
 		*/
 		if (normal.y < 0.9) {
 			// stone
-			FragColor = vec4(out_color.xyz * 0.3 + 0.4, 1);
+			FragColor = colorStone;
 		} else {
 			if (scale.y * 0.085 > triangleVert0Pos.y) {
 				// sand
-				FragColor = vec4(out_color.xyz * 0.2 + 0.8, 1);
-				FragColor.b = 0.1;
+				FragColor = colorSand;
 			} else if (scale.y * 0.62 < triangleVert0Pos.y) {
 				// snow
-				FragColor = vec4(out_color.xyz * 0.2 + 0.8, 1);
+				FragColor = colorSnow;
 			} else {
 				// grass
-				FragColor = vec4(0.1, out_color.x * 0.3 + 0.7, 0.1, 1);
+				FragColor = colorGrass;
 			}
 		}
 		
-		vec4 waterColor =  vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
 		
-		float w = clamp(outWater, 0.0, 1.0);
-		if (w < 0.25) {
-			w *= 10.0;
+		if (useWater == 1) {
+			float w = clamp(outWater * 1000.0f, 0.0, 1.0);
+			if (w < 0.25) {
+				w *= 10.0;
+				w = sqrt(w);
+				w = sqrt(w);
+				w *= 0.1;
+			}
+			FragColor = mix(FragColor, colorWater, w);
+		} else {
+			float w = clamp(outWater * 1000.0f, 0.0, 1.0);
 			w = sqrt(w);
-			w = sqrt(w);
-			w *= 0.1;
+// 			if (w < 0.25) {
+// 				w *= 10.0;
+// 				w = sqrt(w);
+// 				w *= 0.1;
+// 			}
+			FragColor = mix(FragColor, colorSand, w);
 		}
-		FragColor = mix(FragColor, waterColor, w);
 
 		float light = dot(normal, normalize(vec3(-0.6, -0.1, -0.5)));
 // 		light *= light * light;
@@ -61,6 +80,6 @@ void main()
 // 		light = light * 1.2 - 0.2;
 // 		light = 1.0 - light*0.6;
 
-		FragColor = vec4(FragColor.xyz * light, 1);
+		FragColor = vec4(FragColor.xyz * light, 1.0 - float(useWater) * 0.3);
 	}
 }

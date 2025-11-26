@@ -7,7 +7,8 @@ layout(location = 2) in float water;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-uniform vec3 renderScaleVec = vec3(1,3,1);
+uniform vec3 renderScaleVec = vec3(1,6,1);
+uniform int useWater = 0;
 
 uniform ivec2 size;
 uniform vec3 scale;
@@ -21,8 +22,8 @@ void main()
 {
 	int x = gl_VertexID % size.x;
 	int z = gl_VertexID / size.x;
-	_in_intPos = vec3(x, height, z);
-	_in_pos = vec3(x * scale.x, height * scale.y, z * scale.z);
+	_in_intPos = vec3(x, (height + water * float(useWater)), z);
+	_in_pos = vec3(x * scale.x, (height + water * float(useWater)) * scale.y, z * scale.z);
 	gl_Position = projection * view * model * vec4(_in_pos * renderScaleVec, 1);
 	_in_out_color = color;
 	_in_water = water;

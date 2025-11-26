@@ -58,7 +58,7 @@ struct Grid {
 	Grid() {
 		width = height = 0;
 		tiles = NULL;
-		dt = 0.02;
+		dt = 0.01;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;

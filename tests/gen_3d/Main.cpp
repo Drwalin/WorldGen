@@ -19,7 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 * 2;
+int width = 512;
 int height = width;
 
 float uniScale = 0.01;
@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 	int modelLoc = shader.GetUniformLocation("model");
 	int viewLoc = shader.GetUniformLocation("view");
 	int projLoc = shader.GetUniformLocation("projection");
+	int useWaterLoc = shader.GetUniformLocation("useWater");
 
 	shader.Use();
 	glUniform2iv(shader.GetUniformLocation("size"), 1,
@@ -213,7 +214,13 @@ int main(int argc, char **argv)
 
 		// Draw VAO
 		if (disableRender == false) {
+			shader.SetInt(useWaterLoc, 0);
+			glDepthMask(true);
 			vao.Draw();
+			shader.SetInt(useWaterLoc, 1);
+			glDepthMask(false);
+			vao.Draw();
+			glDepthMask(true);
 		}
 
 		DefaultIterationEnd();
@@ -282,8 +289,8 @@ void ThreadFunction()
 				 ++_y) {
 				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
 					 ++_x) {
-					float x = _x;
-					float y = _y;
+					float x = _x + 400;
+					float y = _y + 400;
 					const int i = _x + _y * width;
 					glm::vec3 v;
 
@@ -312,7 +319,7 @@ void ThreadFunction()
 
 					// 					v.x *= sqrt(v.x / verticalScale);
 					// 					v.x = sqrt(v.x * verticalScale);
-					float h = v.x * 3.0f;
+					float h = v.x;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
@@ -427,7 +434,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
@@ -448,7 +455,7 @@ void HydroErosionIteration()
 					}
 					
 					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water};
+					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, t->water / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
