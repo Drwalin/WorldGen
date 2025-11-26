@@ -19,7 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 + 64;
+int width = 512 * 2;
 int height = width;
 
 float uniScale = 0.01;
@@ -312,7 +312,7 @@ void ThreadFunction()
 
 					// 					v.x *= sqrt(v.x / verticalScale);
 					// 					v.x = sqrt(v.x * verticalScale);
-					float h = v.x;
+					float h = v.x * 3.0f;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
@@ -400,7 +400,11 @@ void HydroErosionIteration()
 		
 		grid.At<false>(1, 1)->water += 4;
 		grid.At<false>(1, 1)->water += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
-		grid.At<false>(15, 500)->water += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+		for (int _y = 13; _y < 18; ++_y) {
+			for (int _x = 498; _x < 503; ++_x) {
+				grid.At<false>(15, 500)->water += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
+			}
+		}
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		
 		grid.FullCycle();
@@ -413,7 +417,8 @@ void HydroErosionIteration()
 				for (int _x = 0; _x < width; ++_x) {
 					const int i = _x + _y * width;
 					const Tile *t = grid.At<false>(_x, _y);
-					float h = t->ground + t->sediment + t->water;
+					float h = t->ground;// + t->water + t->sediment;
+// 					float h = t->sediment;
 					h /= HYDRO_EROSION_Y_SCALE;
 					
 					if (h > -10000 && h < 50000) {

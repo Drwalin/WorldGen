@@ -19,7 +19,7 @@ inline float Grid::CalcFluxInDirection(Tile& src, Tile* neigh) const {
 	if(neigh == nullptr)
 		return 0.0f;
 	Tile& dst = *neigh;
-	float dh = (src.b - dst.b) + (src.d - dst.d);
+	float dh = (src.ground - dst.ground) + (src.sediment - dst.sediment) + (src.water - dst.water);
 	float f = src.fluxArray[dir] + dt * A * g * dh / l;
 	if(f < 0.0f)
 		f = 0.0f;
@@ -55,9 +55,9 @@ template<bool safe>
 void Grid::UpdateWaterLevel(Tile& src, Tile** neighs) {
 	float fs = 0;
 	FOR_EACH_DIR_SAFE_COND(neighs[DIR], fs += neighs[DIR]->fluxArray[R_DIR] - src.fluxArray[DIR]);
-	src.d += (dt/(l*l)) * fs;
-	if (src.d < 0.0f) {
-		src.d = 0;
+	src.water += (dt/(l*l)) * fs;
+	if (src.water < 0.0f) {
+		src.water = 0;
 	}
 }
 
@@ -144,14 +144,14 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 template<bool safe>
 inline void Grid::ErosionAndDepositionUpdate(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	float ds = src.deltaSedimentGround * 0.25;
+	float ds = src.deltaSedimentGround * 0.9f;
 	src.ground -= ds;
 	src.sediment += ds;
 	src.deltaSedimentGround = 0;
 	
-	if (src.sediment < 0.0f) {
-		printf("SDUP(%.16f)\n", src.sediment);
-	}
+// 	if (src.sediment < 0.0f) {
+// 		printf("SDUP(%.16f)\n", src.sediment);
+// 	}
 }
 
 static inline float SumFlux(const Tile &t) {
@@ -161,115 +161,174 @@ static inline float SumFlux(const Tile &t) {
 template<bool safe>
 inline void Grid::SedimentTransportation(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	if constexpr (false) {
-		float sx, sy;
-		sx = (x - src.vx*dt)/l;
-		sy = (y - src.vy*dt)/l;
+	switch(3) {
+	case 0: {
+		const float sx = (x - src.vx*dt)/l;
+		const float sy = (y - src.vy*dt)/l;
 		
-		int SX = sx;
-		int SY = sy;
+		const int SX = floor(sx);
+		const int SY = floor(sy);
 		
-		if(SX < 0)
-			return;
-		if(SX+1 >= width)
-			return;
-		if(SY < 0)
-			return;
-		if(SY+1 >= height)
-			return;
+// 		if(SX < 0)
+// 			return;
+// 		if(SX+1 >= width)
+// 			return;
+// 		if(SY < 0)
+// 			return;
+// 		if(SY+1 >= height)
+// 			return;
 		
-		Tile& a00 = *At<false>(SX, SY);
-		Tile& a10 = *At<false>(SX+1, SY);
-		Tile& a11 = *At<false>(SX+1, SY+1);
-		Tile& a01 = *At<false>(SX, SY+1);
+		Tile empty;
+		empty.sediment = 0;
+		Tile *a00 = At<safe>(SX, SY);
+		Tile *a10 = At<safe>(SX+1, SY);
+		Tile *a11 = At<safe>(SX+1, SY+1);
+		Tile *a01 = At<safe>(SX, SY+1);
+		if (a00 == nullptr) a00 = &empty;
+		if (a10 == nullptr) a10 = &empty;
+		if (a01 == nullptr) a01 = &empty;
+		if (a11 == nullptr) a11 = &empty;
 		
-		float rx = sx - SX;
-		float ry = sy - SY;
+		const float rx = sx - SX;
+		const float ry = sy - SY;
 		
-		float ds00 = a00.s * (1-rx) * (1-ry);
-		float ds10 = a10.s * (rx) * (1-ry);
-		float ds01 = a01.s * (1-rx) * (ry);
-		float ds11 = a11.s * (rx) * (ry);
+		const float ds00 = 0.25f * a00->s * (1.0f-rx) * (1.0f-ry);
+		const float ds10 = 0.25f * a10->s * (rx) * (1.0f-ry);
+		const float ds01 = 0.25f * a01->s * (1.0f-rx) * (ry);
+		const float ds11 = 0.25f * a11->s * (rx) * (ry);
 		
-		a00.s -= ds00;
-		a10.s -= ds10;
-		a01.s -= ds01;
-		a11.s -= ds11;
+		const static auto F = +[](float v)->bool{ return v >= 0.0f && v <= 1.0f; };
+		assert(F(rx));
+		assert(F(1.0f-rx));
+		assert(F(ry));
+		assert(F(1.0f-ry));
+		
+		a00->s -= ds00;
+		a10->s -= ds10;
+		a01->s -= ds01;
+		a11->s -= ds11;
 		
 		src.s += ds00 + ds10 + ds01 + ds11;
-	} else {
-		/*
-		src.deltaSedimentGround = 0;
-		
-		Tile *tiles[3][3];
-		for (int X = 0; X <= 2; ++X) {
-			for (int Y = 0; Y <= 2; ++Y) {
-				tiles[X][Y] = At<safe>(x+X-1, y+Y-1);
-			}
-		}
-		
-		for (int _X = 0; _X <= 2; ++_X) {
-			for (int _Y = 0; _Y <= 2; ++_Y) {
-				if (_X == 1 && _Y == 1) {
-					continue;
-				}
-				Tile *t = tiles[_X][_Y];
-				int X = _X+x-1;
-				int Y = _Y+y-1;
-				float vx = t->vx;
-				float vy = t->vy;
-				float avx = vx < 0.0f ? -vx : vx;
-				float avy = vy < 0.0f ? -vy : vy;
-				
-				if (vx * (_X-1.0f) >= 0.0f) {
-					continue;
-				}
-				if (vy * (_Y-1.0f) >= 0.0f) {
-					continue;
-				}
-				
-				if (avx > avy) {
-					
-				} else if (avx == avy) {
-					if (abs(_X-1) == abs(_Y-1)) {
-						continue;
-					}
-					src.deltaSedimentGround += t->sediment;
-					
-					
-				} else {
-					
-				}
-				
-				
-				
-				
-				
-				
-				if (sum > 0.0f) {
-					const float neighSed = neighs[DIR]->s;
-					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
-					src.deltaSedimentGround += neighSed * incomingFlux / sum;
-				}
-				
-			}
-		}
-		*/
-		
-		
-		
+	} break;
+	case 1: {
 		NEIGHBOURS(neighs, x, y);
-		src.deltaSedimentGround = 0;
-		float sum;
 		FOR_EACH_DIR_SAFE_COND(neighs[DIR],
 			{
-				sum = SumFlux(*(neighs[DIR]));
+				const float sum = SumFlux(*(neighs[DIR])) * 16.0f;
 				if (sum > 0.0f) {
 					const float neighSed = neighs[DIR]->s;
 					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
-					src.deltaSedimentGround += neighSed * incomingFlux / sum;
+					const float dV = neighSed * incomingFlux / sum;
+					src.deltaSedimentGround += dV;
+					neighs[DIR]->deltaSedimentGround -= dV;
 				}
 			});
+	} break;
+	case 2: {
+		float vx = src.vx;
+		float vy = src.vy;
+		float avx = vx < 0.0f ? -vx : vx;
+		float avy = vy < 0.0f ? -vy : vy;
+		
+		const float maxv = avx > avy ? avx : avy;
+		const float minv = avx < avy ? avx : avy;
+		
+		if (maxv > 0.0001f) {
+		} else {
+			break;
+		}
+		
+		const int dvx = vx > 0.0f ? 1 : (vx < 0.0f ? -1 : 0);
+		const int dvy = vy > 0.0f ? 1 : (vy < 0.0f ? -1 : 0);
+		
+		Tile *nx = At<safe>(x+dvx, y);
+		Tile *ny = At<safe>(x, y+dvy);
+		Tile *nxy = At<safe>(x+dvx, y+dvy);
+		
+		const float _diagv = nxy ? minv : 0.0f;
+		float fvx = nx ? avx - _diagv : 0.0f;
+		float fvy = ny ? avy - _diagv : 0.0f;
+		float diagv = _diagv * 1.4142135623730950488; // sqrt(2)
+		
+		float total = diagv + fvx + fvy;
+		if (total > 0.95f) {
+			float div = 1.0f / (total * 1.05f);
+// 			diagv /= total;
+// 			fvx /= total;
+// 			fvy /= total;
+			diagv *= div;
+			fvx *= div;
+			fvy *= div;
+			total = 1.0f;
+			if (nx && ny && nxy) {
+// 				assert(fabs(total - (diagv + fvx + fvy)) < 0.00001);
+			}
+		}
+		
+		if (nx && ny && nxy) {
+// 			assert(fabs(total - (diagv + fvx + fvy)) < 0.00001);
+		} else {
+			total = diagv + fvx + fvy;
+		}
+		
+// 		assert(total <= 1.0f);
+		
+		constexpr float factor = 0.125f;
+		
+		const float sediment = src.sediment;
+		const float toDiag = sediment * diagv * factor;
+		const float toX = sediment * fvx * factor;
+		const float toY = sediment * fvy * factor;
+		
+		const float toTransfer = toDiag + toX + toY;
+		
+		src.deltaSedimentGround -= toTransfer;
+		if (nx) nx->deltaSedimentGround += toX;
+		if (ny) ny->deltaSedimentGround += toY;
+		if (nxy) nxy->deltaSedimentGround += toDiag;
+		
+		assert (toTransfer <= sediment + 0.0000001);
+		
+	} break;
+	case 3: {
+		const float sx = (x - src.vx*dt)/l;
+		const float sy = (y - src.vy*dt)/l;
+		
+		const int SX = floor(sx);
+		const int SY = floor(sy);
+		
+		Tile empty;
+		empty.sediment = 0;
+		Tile *a00 = At<safe>(SX, SY);
+		Tile *a10 = At<safe>(SX+1, SY);
+		Tile *a11 = At<safe>(SX+1, SY+1);
+		Tile *a01 = At<safe>(SX, SY+1);
+		if (a00 == nullptr) a00 = &empty;
+		if (a10 == nullptr) a10 = &empty;
+		if (a01 == nullptr) a01 = &empty;
+		if (a11 == nullptr) a11 = &empty;
+		
+		const float rx = sx - SX;
+		const float ry = sy - SY;
+		
+		const float ds00 = a00->s * (1.0f-rx) * (1.0f-ry);
+		const float ds10 = a10->s * (rx) * (1.0f-ry);
+		const float ds01 = a01->s * (1.0f-rx) * (ry);
+		const float ds11 = a11->s * (rx) * (ry);
+		
+		const static auto F = +[](float v)->bool{ return v >= 0.0f && v <= 1.0f; };
+		assert(F(rx));
+		assert(F(1.0f-rx));
+		assert(F(ry));
+		assert(F(1.0f-ry));
+		
+// 		a00->s -= ds00;
+// 		a10->s -= ds10;
+// 		a01->s -= ds01;
+// 		a11->s -= ds11;
+		
+		src.deltaSedimentGround = (ds00 + ds10 + ds01 + ds11) - src.sediment;
+	} break;
 	}
 }
 
@@ -287,13 +346,18 @@ inline void Grid::SedimentTransportationUpdate(int x, int y) {
 	}
 	
 	
-	float f = SumFlux(src);
-	if (f > 0.0f) {
-		src.s = src.deltaSedimentGround;
-	} else {
+// 	float f = SumFlux(src);
+// 	if (f > 0.0f) {
+// 		src.s = src.deltaSedimentGround;
+// 	} else {
 		src.s += src.deltaSedimentGround;
-	}
+// 	}
 	src.deltaSedimentGround = 0;
+	
+	
+	if (src.sediment < 0.0f) {
+		printf("SDUP2(%.16f)\n", src.sediment);
+	}
 }
 
 inline float Grid::EvaporationRate(int x, int y) {
@@ -320,6 +384,12 @@ template<bool safe>
 inline void Grid::SmoothUpdate(int x, int y) {
 	Tile& src = *At<false>(x, y);
 	src.ground = src.deltaSedimentGround;
+}
+
+template<bool safe>
+inline void Grid::ClearDelta(int x, int y) {
+	Tile& src = *At<false>(x, y);
+	src.deltaSedimentGround = 0;
 }
 
 constexpr int XDXDX = 4;
@@ -415,10 +485,11 @@ void Grid::FullCycle() {
  	FOR_EACH_SAFE_BORDERS(1, true, UpdateWaterLevelAndVelocity);
  	FOR_EACH_SAFE_BORDERS(1, true, ErosionAndDepositionCalculation);
  	FOR_EACH_SAFE_BORDERS(0, true, ErosionAndDepositionUpdate);
- 	FOR_EACH_SAFE_BORDERS(1, true, SedimentTransportation);
- 	FOR_EACH_SAFE_BORDERS(0, true, SedimentTransportationUpdate);
+ 	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
+ 	FOR_EACH_SAFE_BORDERS(12, false, SedimentTransportation);
+ 	FOR_EACH_SAFE_BORDERS(0, false, SedimentTransportationUpdate);
  	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
-	if (false && iter % 16 == 0) {
+	if (false && iter % 17 == 0) {
 		FOR_EACH_SAFE_BORDERS(1, true, Smooth);
 		FOR_EACH_SAFE_BORDERS(0, true, SmoothUpdate);
 	}

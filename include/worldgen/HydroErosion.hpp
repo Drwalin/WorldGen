@@ -58,7 +58,7 @@ struct Grid {
 	Grid() {
 		width = height = 0;
 		tiles = NULL;
-		dt = 0.1;
+		dt = 0.03;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;
@@ -134,6 +134,8 @@ struct Grid {
 	inline void Smooth(int x, int y); // 3.4
 	template<bool safe>
 	inline void SmoothUpdate(int x, int y); // 3.4
+	template<bool safe>
+	inline void ClearDelta(int x, int y);
 
 	template<int BORDER, bool PARALLEL, typename T1, typename T2>
 	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
