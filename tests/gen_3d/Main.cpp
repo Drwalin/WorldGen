@@ -19,7 +19,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512;
+int width = 512 + 64;
 int height = width;
 
 float uniScale = 0.01;
@@ -117,6 +117,7 @@ int main(int argc, char **argv)
 	int viewLoc = shader.GetUniformLocation("view");
 	int projLoc = shader.GetUniformLocation("projection");
 	int useWaterLoc = shader.GetUniformLocation("useWater");
+	int gridWidthLoc = shader.GetUniformLocation("gridWidth");
 
 	shader.Use();
 	glUniform2iv(shader.GetUniformLocation("size"), 1,
@@ -126,6 +127,7 @@ int main(int argc, char **argv)
 	// (*(glm::vec2*)(std::vector<int32_t>{width, height}.data())));
 	shader.SetVec3(shader.GetUniformLocation("scale"),
 				   glm::vec3(horizontalScale, verticalScale, horizontalScale));
+	shader.SetInt(gridWidthLoc, width);
 
 	// Init camera position
 	camera.ProcessMouseMovement(175, 50);
@@ -214,13 +216,19 @@ int main(int argc, char **argv)
 
 		// Draw VAO
 		if (disableRender == false) {
-			shader.SetInt(useWaterLoc, 0);
-			glDepthMask(true);
-			vao.Draw();
-			shader.SetInt(useWaterLoc, 1);
-			glDepthMask(false);
-			vao.Draw();
-			glDepthMask(true);
+			if (width > 1600) {
+				glDepthMask(true);
+				shader.SetInt(useWaterLoc, 1);
+				vao.Draw();
+			} else {
+				shader.SetInt(useWaterLoc, 0);
+				glDepthMask(true);
+				vao.Draw();
+				shader.SetInt(useWaterLoc, 1);
+				glDepthMask(false);
+				vao.Draw();
+				glDepthMask(true);
+			}
 		}
 
 		DefaultIterationEnd();
@@ -289,8 +297,8 @@ void ThreadFunction()
 				 ++_y) {
 				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
 					 ++_x) {
-					float x = _x + 400;
-					float y = _y + 400;
+					float x = _x;
+					float y = _y;
 					const int i = _x + _y * width;
 					glm::vec3 v;
 

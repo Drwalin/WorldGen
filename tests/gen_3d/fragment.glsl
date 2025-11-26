@@ -2,6 +2,7 @@
 
 uniform vec3 scale;
 uniform int useWater = 0;
+uniform int gridWidth;
 
 in vec4 out_color;
 in vec3 pos;
@@ -60,6 +61,11 @@ void main()
 				w = sqrt(w);
 				w *= 0.1;
 			}
+			if (gridWidth <= 1600) {
+				if (w < 0.05) {
+					discard;
+				}
+			}
 			FragColor = mix(FragColor, colorWater, w);
 		} else {
 			float w = clamp(outWater * 1000.0f, 0.0, 1.0);
@@ -81,5 +87,8 @@ void main()
 // 		light = 1.0 - light*0.6;
 
 		FragColor = vec4(FragColor.xyz * light, 1.0 - float(useWater) * 0.3);
+		if (gridWidth > 1600) {
+			FragColor.w = 1.0;
+		}
 	}
 }

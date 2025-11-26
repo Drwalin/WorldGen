@@ -105,9 +105,7 @@ inline float Grid::SinusLocalTiltAngle(Tile& t, int x, int y) {
 	
 	const float dhdx = (neighs[0]->b - neighs[2]->b) / xl;
 	const float dhdy = (neighs[1]->b - neighs[3]->b) / yl;
-	
 	const float s = dhdx*dhdx + dhdy*dhdy;
-	
 	return sqrt(s) / sqrt(1.0f + s);
 }
 
@@ -144,7 +142,7 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 template<bool safe>
 inline void Grid::ErosionAndDepositionUpdate(int x, int y) {
 	Tile& src = *At<false>(x, y);
-	float ds = src.deltaSedimentGround * 0.9f;
+	float ds = src.deltaSedimentGround * dt;
 	src.ground -= ds;
 	src.sediment += ds;
 	src.deltaSedimentGround = 0;
@@ -370,7 +368,6 @@ inline void Grid::SedimentTransportation(int x, int y) {
 					const float incomingFlux = neighs[DIR]->fluxArray[R_DIR];
 					const float dV = dt * neighSed * incomingFlux / sum;
 					src.deltaSedimentGround += dV;
-					neighs[DIR]->deltaSedimentGround -= dV;
 				}
 			});
 	} break;
@@ -390,13 +387,20 @@ inline void Grid::SedimentTransportationUpdate(int x, int y) {
 		}
 	}
 	
+	float f = SumFlux(src);
+	if (f > 0.0f) {
+		src.sediment *= 1.0f - dt;
+	}
+	src.sediment += src.deltaSedimentGround;
 	
-// 	float f = SumFlux(src);
-// 	if (f > 0.0f) {
-// 		src.s = src.deltaSedimentGround;
-// 	} else {
+	/*
+	float f = SumFlux(src);
+	if (f > 0.0f) {
+		src.s = src.deltaSedimentGround;
+	} else {
 		src.sediment += src.deltaSedimentGround;
-// 	}
+	}
+	*/
 	src.deltaSedimentGround = 0;
 	
 	
@@ -530,9 +534,9 @@ void Grid::FullCycle() {
 	FOR_EACH_SAFE_BORDERS(1, true, UpdateWaterLevelAndVelocity);
 	FOR_EACH_SAFE_BORDERS(1, true, ErosionAndDepositionCalculation);
 	FOR_EACH_SAFE_BORDERS(0, true, ErosionAndDepositionUpdate);
-	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
-	FOR_EACH_SAFE_BORDERS(12, false, SedimentTransportation);
-	FOR_EACH_SAFE_BORDERS(0, false, SedimentTransportationUpdate);
+// 	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
+	FOR_EACH_SAFE_BORDERS(1, true, SedimentTransportation);
+	FOR_EACH_SAFE_BORDERS(0, true, SedimentTransportationUpdate);
 	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
 	if (false && iter % 1 == 0) {
 		FOR_EACH_SAFE_BORDERS(1, true, Smooth);

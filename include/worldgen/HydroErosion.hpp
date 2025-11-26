@@ -5,6 +5,15 @@
 
 #include <cstdio>
 
+/*
+ * Angles of repose:
+ *    dry sand: 34*
+ *    wet sand: 45*
+ *    soil: 30* - 45*
+ *    snow: 38*
+ *    sand with water: 15* - 30*    // maybe can be used for sediment
+ */
+
 struct Flux {
 	float L;
 	float B;
@@ -12,7 +21,7 @@ struct Flux {
 	float T;
 };
 
-struct alignas(64) Tile {
+struct Tile {
 	Tile() {
 		ground = 0;
 		water = 0;
@@ -58,7 +67,7 @@ struct Grid {
 	Grid() {
 		width = height = 0;
 		tiles = NULL;
-		dt = 0.01;
+		dt = 0.02;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;
