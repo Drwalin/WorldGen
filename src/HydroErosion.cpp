@@ -322,12 +322,12 @@ inline void Grid::SedimentTransportation(int x, int y) {
 		assert(F(ry));
 		assert(F(1.0f-ry));
 		
-// 		a00->s -= ds00;
-// 		a10->s -= ds10;
-// 		a01->s -= ds01;
-// 		a11->s -= ds11;
+		a00->s -= ds00;
+		a10->s -= ds10;
+		a01->s -= ds01;
+		a11->s -= ds11;
 		
-		src.deltaSedimentGround = (ds00 + ds10 + ds01 + ds11) - src.sediment;
+		src.deltaSedimentGround = (ds00 + ds10 + ds01 + ds11);
 	} break;
 	}
 }
@@ -374,7 +374,7 @@ template<bool safe>
 inline void Grid::Smooth(int x, int y) {
 	Tile& src = *At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
-	constexpr float mult = 512;
+	constexpr float mult = 128;
 	float sum = src.ground * (mult - 4);
 	FOR_EACH_DIR(sum += neighs[DIR] ? neighs[DIR]->ground : src.ground);
 	src.deltaSedimentGround = sum / mult;
@@ -489,7 +489,7 @@ void Grid::FullCycle() {
  	FOR_EACH_SAFE_BORDERS(12, false, SedimentTransportation);
  	FOR_EACH_SAFE_BORDERS(0, false, SedimentTransportationUpdate);
  	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
-	if (false && iter % 17 == 0) {
+	if (true && iter % 1 == 0) {
 		FOR_EACH_SAFE_BORDERS(1, true, Smooth);
 		FOR_EACH_SAFE_BORDERS(0, true, SmoothUpdate);
 	}
