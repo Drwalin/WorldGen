@@ -404,7 +404,7 @@ inline void Grid::SedimentTransportationUpdate(int x, int y) {
 }
 
 template<bool safe>
-inline void Grid::MaterialSlippageCalculation(int x, int y) {
+inline void Grid::ThermalErosionCalculation(int x, int y) {
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	NEIGHBOURS_CORNERS(neighCorners, x, y);
@@ -471,7 +471,7 @@ inline void Grid::MaterialSlippageCalculation(int x, int y) {
 }
 
 template<bool safe>
-inline void Grid::MaterialSlippageUpdate(int x, int y) {
+inline void Grid::ThermalErosionUpdate(int x, int y) {
 	int src = At<false>(x, y);
 	ground[src].AddGeneral(deltaSedimentGround[src]);
 }
@@ -601,7 +601,7 @@ void Grid::FullCycle() {
 	++iter;
 	constexpr bool parallel = true;
 	constexpr bool useWater = true;
-	constexpr bool materialSlippage = true;
+	constexpr bool thermalErosion = true;
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(1, parallel, CalcOutflux);
 		FOR_EACH_SAFE_BORDERS(1, parallel, UpdateWaterLevelAndVelocity);
@@ -611,9 +611,9 @@ void Grid::FullCycle() {
 		FOR_EACH_SAFE_BORDERS(1, parallel, SedimentTransportation);
 		FOR_EACH_SAFE_BORDERS(0, parallel, SedimentTransportationUpdate);
 	}
-	if (materialSlippage) {
-		FOR_EACH_SAFE_BORDERS(1, parallel, MaterialSlippageCalculation);
-		FOR_EACH_SAFE_BORDERS(0, parallel, MaterialSlippageUpdate);
+	if (thermalErosion) {
+		FOR_EACH_SAFE_BORDERS(1, parallel, ThermalErosionCalculation);
+		FOR_EACH_SAFE_BORDERS(0, parallel, ThermalErosionUpdate);
 	}
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(0, parallel, Evaporation);

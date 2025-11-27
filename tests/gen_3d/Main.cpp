@@ -33,6 +33,7 @@ float verticalScale = uniScale;//1200.0f * uniScale / SCALE;
 float noiseHorizontalScale = 1.0f / 4000.0f * SCALE;
 volatile int HYDRO_ITER = 0;
 volatile float averageHydroIterationDuration = 0.0f;
+volatile bool disableSimulation = false;
 
 volatile long double SUM_MATERIAL = 0;
 
@@ -166,6 +167,9 @@ int main(int argc, char **argv)
 		if (gl::openGL.WasKeyPressed('O')) {
 			disableRender = !disableRender;
 		}
+		if (gl::openGL.WasKeyPressed('P')) {
+			disableSimulation = !disableSimulation;
+		}
 
 		{
 // 			constexpr int div = 32;
@@ -298,8 +302,8 @@ void ThreadFunction()
 				 ++_y) {
 				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
 					 ++_x) {
-					float x = _x + 1000;
-					float y = _y + 1000;
+					float x = _x;
+					float y = _y;
 					const int i = _x + _y * width;
 					glm::vec3 v;
 
@@ -328,7 +332,7 @@ void ThreadFunction()
 
 					// 					v.x *= sqrt(v.x / verticalScale);
 					// 					v.x = sqrt(v.x * verticalScale);
-					float h = v.x * 1000.0f;
+					float h = v.x * 600.0f;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					verts[i] = {h,
@@ -369,13 +373,19 @@ void HydroErosionIteration()
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE - 20.0f;
-				grid.ground[t][1] = 20.0f;
+				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE - 2.0f;
+				grid.ground[t][1] = 2.0f;
 			}
 		}
 	}
 
 	for (HYDRO_ITER=0;; HYDRO_ITER = HYDRO_ITER + 1) {
+		if (disableSimulation) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(150));
+			HYDRO_ITER = HYDRO_ITER - 1;;
+			continue;
+		}
+		
 		const auto a = std::chrono::steady_clock::now();
 
 		if (HYDRO_ITER % 11 == 0) {
@@ -408,13 +418,13 @@ void HydroErosionIteration()
 		}
 		
 		if (true) {
-		grid.water[grid.At<false>(1, 1)] += 4;
-		grid.water[grid.At<false>(1, 1)] += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
-		for (int _y = 13; _y < 18; ++_y) {
-			for (int _x = 498; _x < 503; ++_x) {
-				grid.water[grid.At<false>(15, 500)] += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
+			grid.water[grid.At<false>(1, 1)] += 4;
+			grid.water[grid.At<false>(1, 1)] += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+			for (int _y = 13; _y < 18; ++_y) {
+				for (int _x = 498; _x < 503; ++_x) {
+					grid.water[grid.At<false>(15, 500)] += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
+				}
 			}
-		}
 		}
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		

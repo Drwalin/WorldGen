@@ -14,6 +14,7 @@ in float outWater;
 out vec4 FragColor;
 
 const float factorGrid = 0.0;
+const float heightScale = 500.0;
 
 void main()
 {
@@ -40,10 +41,10 @@ void main()
 			// stone
 			FragColor = colorStone;
 		} else {
-			if (scale.y * 0.085 > triangleVert0Pos.y) {
+			if (scale.y * 0.085 * heightScale > triangleVert0Pos.y) {
 				// sand
 				FragColor = colorSand;
-			} else if (scale.y * 0.62 < triangleVert0Pos.y) {
+			} else if (scale.y * 0.62 * heightScale < triangleVert0Pos.y) {
 				// snow
 				FragColor = colorSnow;
 			} else {

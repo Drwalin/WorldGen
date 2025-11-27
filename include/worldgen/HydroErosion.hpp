@@ -69,7 +69,7 @@ struct Grid {
 	}
 	Grid() {
 		width = height = 0;
-		dt = 0.02;
+		dt = 0.01;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;
@@ -101,7 +101,12 @@ struct Grid {
 		float *s;
 	};
 	
-	float tangentOfAngleOfRecluse[2] = {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
+	// tan(30) ~= 0.577
+	// tan(45) ~= 1
+	// tan(60) ~= 1.732
+	// tan(75) ~= 3.732
+	static constexpr float tangentOfAngleOfRecluse[2] = {3.732, 1};
+	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
 	
 	union {
 		float hardness[2] = {0.2, 0.1};
@@ -179,9 +184,9 @@ struct Grid {
 	
 	
 	template<bool safe>
-	inline void MaterialSlippageCalculation(int x, int y);
+	inline void ThermalErosionCalculation(int x, int y);
 	template<bool safe>
-	inline void MaterialSlippageUpdate(int x, int y);
+	inline void ThermalErosionUpdate(int x, int y);
 
 	template<int BORDER, bool PARALLEL, typename T1, typename T2>
 	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
