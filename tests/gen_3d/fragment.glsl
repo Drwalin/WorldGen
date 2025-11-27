@@ -54,7 +54,7 @@ void main()
 		
 		
 		if (useWater == 1) {
-			float w = clamp(outWater * 1000.0f, 0.0, 1.0);
+			float w = clamp(outWater, 0.0, 1.0);
 			if (w < 0.25) {
 				w *= 10.0;
 				w = sqrt(w);
@@ -68,7 +68,7 @@ void main()
 			}
 			FragColor = mix(FragColor, colorWater, w);
 		} else {
-			float w = clamp(outWater * 1000.0f, 0.0, 1.0);
+			float w = clamp(outWater, 0.0, 1.0);
 			w = sqrt(w);
 // 			if (w < 0.25) {
 // 				w *= 10.0;

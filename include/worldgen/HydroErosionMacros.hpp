@@ -16,6 +16,14 @@
 		Neighbour<safe, 2>(X, Y), \
 		Neighbour<safe, 3>(X, Y) }
 
+#define NEIGHBOURS_CORNERS(VAR_NAME, X, Y) \
+	int VAR_NAME[4] = { \
+		At<safe>(X-1, Y-1), \
+		At<safe>(X+1, Y-1), \
+		At<safe>(X-1, Y+1), \
+		At<safe>(X+1, Y+1), \
+		}
+
 #define FOR_EACH_DIR(CODE) \
 { \
 	{ \

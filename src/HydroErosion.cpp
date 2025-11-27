@@ -403,6 +403,79 @@ inline void Grid::SedimentTransportationUpdate(int x, int y) {
 // 	}
 }
 
+template<bool safe>
+inline void Grid::MaterialSlippageCalculation(int x, int y) {
+	int src = At<false>(x, y);
+	NEIGHBOURS(neighs, x, y);
+	NEIGHBOURS_CORNERS(neighCorners, x, y);
+	deltaSedimentGround[src] = 0;
+	float _h11 = ground[src][1];
+	float _h0 = ground[src][0];
+	float _h1 = _h0 + _h11;
+	float t1 = l * tangentOfAngleOfRecluse[1];
+	float t0 = l * tangentOfAngleOfRecluse[0];
+	constexpr float halfSqrt2 = 0.7071067811865475244f;
+	float delta = 0.0f;
+	
+	float n0;
+	float n11;
+	float n1;
+	
+	auto func = [&](){
+		float h0 = _h0;
+		float h1 = _h1;
+		float h11 = _h11;
+
+		bool swapped = h1 < n1;
+		if (swapped) {
+			std::swap(n0, h0);
+			std::swap(n1, h1);
+			std::swap(n11, h11);
+		}
+
+		float hh0 = n0 + t0;
+		float hh1 = n1 + t1;
+		float d = 0.0f;
+		if (hh0 < hh1) {
+			hh0 = hh1;
+		}
+
+		if (h1 > hh1) {
+			d = std::min(h1 - hh1, h11);
+			if (h1 > hh0) {
+				d = std::max(d, h1 - hh0);
+			}
+			delta = delta + (swapped ? d : -d);
+		}
+	};
+	
+	FOR_EACH_DIR_SAFE_COND(neighs[DIR],
+		{
+			n0 = ground[neighs[DIR]][0];
+			n11 = ground[neighs[DIR]][1];
+			n1 = n0 + n11;
+			func();
+		});
+	if (true) {
+		t1 *= 2.0f * halfSqrt2;
+		t0 *= 2.0f * halfSqrt2;
+		FOR_EACH_DIR_SAFE_COND(neighCorners[DIR],
+			{
+				n0 = ground[neighCorners[DIR]][0];
+				n11 = ground[neighCorners[DIR]][1];
+				n1 = n0 + n11;
+				func();
+			});
+	}
+	deltaSedimentGround[src] = delta * (1.0f/8.0f) * 0.5f; // * dt;
+}
+
+template<bool safe>
+inline void Grid::MaterialSlippageUpdate(int x, int y) {
+	int src = At<false>(x, y);
+	ground[src].AddGeneral(deltaSedimentGround[src]);
+}
+
 inline float Grid::EvaporationRate(int x, int y) {
 	return 0.01; // Make it dependent on temperature in place (x,y)
 }
@@ -455,7 +528,7 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 	};
 	{
 		int threadsCount =
-			std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
+			std::max(((int)std::thread::hardware_concurrency()) - 4, 0) / 2;
 		while (threads.size() < threadsCount) {
 			threads.push_back(std::thread(
 						[](){
@@ -526,17 +599,28 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 
 void Grid::FullCycle() {
 	++iter;
-	FOR_EACH_SAFE_BORDERS(1, true, CalcOutflux);
-	FOR_EACH_SAFE_BORDERS(1, true, UpdateWaterLevelAndVelocity);
-	FOR_EACH_SAFE_BORDERS(1, true, ErosionAndDepositionCalculation);
-	FOR_EACH_SAFE_BORDERS(0, true, ErosionAndDepositionUpdate);
-// 	FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
-	FOR_EACH_SAFE_BORDERS(1, true, SedimentTransportation);
-	FOR_EACH_SAFE_BORDERS(0, true, SedimentTransportationUpdate);
-	FOR_EACH_SAFE_BORDERS(0, true, Evaporation);
+	constexpr bool parallel = true;
+	constexpr bool useWater = true;
+	constexpr bool materialSlippage = true;
+	if (useWater) {
+		FOR_EACH_SAFE_BORDERS(1, parallel, CalcOutflux);
+		FOR_EACH_SAFE_BORDERS(1, parallel, UpdateWaterLevelAndVelocity);
+		FOR_EACH_SAFE_BORDERS(1, parallel, ErosionAndDepositionCalculation);
+		FOR_EACH_SAFE_BORDERS(0, parallel, ErosionAndDepositionUpdate);
+// 		FOR_EACH_SAFE_BORDERS(0, false, ClearDelta);
+		FOR_EACH_SAFE_BORDERS(1, parallel, SedimentTransportation);
+		FOR_EACH_SAFE_BORDERS(0, parallel, SedimentTransportationUpdate);
+	}
+	if (materialSlippage) {
+		FOR_EACH_SAFE_BORDERS(1, parallel, MaterialSlippageCalculation);
+		FOR_EACH_SAFE_BORDERS(0, parallel, MaterialSlippageUpdate);
+	}
+	if (useWater) {
+		FOR_EACH_SAFE_BORDERS(0, parallel, Evaporation);
+	}
 	if (false && iter % 1 == 0) {
-		FOR_EACH_SAFE_BORDERS(1, true, Smooth);
-		FOR_EACH_SAFE_BORDERS(0, true, SmoothUpdate);
+		FOR_EACH_SAFE_BORDERS(1, parallel, Smooth);
+		FOR_EACH_SAFE_BORDERS(0, parallel, SmoothUpdate);
 	}
 }
 

@@ -3,6 +3,8 @@
 #ifndef HYDRO_EROSION_HPP
 #define HYDRO_EROSION_HPP
 
+#include <cmath>
+
 /*
  * Angles of repose:
  *    dry sand: 34*
@@ -99,6 +101,8 @@ struct Grid {
 		float *s;
 	};
 	
+	float tangentOfAngleOfRecluse[2] = {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
+	
 	union {
 		float hardness[2] = {0.2, 0.1};
 		float Ks[2];
@@ -172,9 +176,16 @@ struct Grid {
 	inline void SmoothUpdate(int x, int y); // 3.4
 	template<bool safe>
 	inline void ClearDelta(int x, int y);
+	
+	
+	template<bool safe>
+	inline void MaterialSlippageCalculation(int x, int y);
+	template<bool safe>
+	inline void MaterialSlippageUpdate(int x, int y);
 
 	template<int BORDER, bool PARALLEL, typename T1, typename T2>
 	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
+	
 	
 	inline float SumFlux(int t);
 	
