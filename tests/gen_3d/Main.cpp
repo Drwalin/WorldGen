@@ -38,7 +38,7 @@ volatile bool disableSimulation = false;
 
 volatile long double SUM_MATERIAL = 0;
 
-std::mt19937_64 mt(std::random_device{}());
+std::mt19937_64 mt(732168281);
 
 struct Vertex {
 	float h;
@@ -376,8 +376,8 @@ void HydroErosionIteration()
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE - 2.0f;
-				grid.ground[t][1] = 2.0f;
+				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE - 0.5f;
+				grid.ground[t][1] = 0.5f;
 			}
 		}
 	}

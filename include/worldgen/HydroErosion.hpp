@@ -3,8 +3,6 @@
 #ifndef HYDRO_EROSION_HPP
 #define HYDRO_EROSION_HPP
 
-#include <cmath>
-
 /*
  * Angles of repose:
  *    dry sand: 34*
@@ -114,8 +112,8 @@ struct Grid {
 	// tan(45) ~= 1
 	// tan(60) ~= 1.732
 	// tan(75) ~= 3.732
-	static constexpr float tangentOfAngleOfRecluse[2] = {2.3, 0.7};
-	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
+	static constexpr float tangentOfAngleOfRecluse[2] = {1.7f, 1.0f};
+	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 45*
 	
 	
 	int width, height;

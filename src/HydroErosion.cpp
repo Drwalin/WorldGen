@@ -499,7 +499,8 @@ inline void Grid::Smooth(int x, int y) {
 template<bool safe>
 inline void Grid::SmoothUpdate(int x, int y) {
 	int src = At<false>(x, y);
-	ground[src].AddGeneral(deltaSedimentGround[src] - ground[src].Total());
+	float dh = deltaSedimentGround[src] - ground[src].Total();
+	ground[src][0] += dh;
 }
 
 template<bool safe>
@@ -618,7 +619,7 @@ void Grid::FullCycle() {
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(0, parallel, Evaporation);
 	}
-	if (true && iter % 77 == 0) {
+	if (true && iter % 47 == 0) {
 		// TODO: replace with selectional smoothing, to smooth only where slope
 		// changes very rapidly
 		FOR_EACH_SAFE_BORDERS(1, parallel, Smooth);
