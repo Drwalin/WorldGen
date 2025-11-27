@@ -48,26 +48,30 @@ struct GroundLayers {
 };
 
 struct Grid {
+	bool useWater = true;
+	bool useThermalErosion = true;
+	bool useSmoothing = false;
+	
 	int iter = 0;
 	void Init(int width, int height) {
 		this->width = width;
 		this->height = height;
-		ground = new GroundLayers[width*height] - 1;
-		water = new float[width*height] - 1;
-		sediment = new float[width*height] - 1;
-		deltaSedimentGround = new float[width*height] - 1;
+		ground = new GroundLayers[width*height + 17] + 16;
+		water = new float[width*height + 17] + 16;
+		sediment = new float[width*height + 17] + 16;
+		deltaSedimentGround = new float[width*height + 17] + 16;
 		for (int i=1; i<=width*height; ++i) {
 			water[i] = 0.0f;
 			sediment[i] = 0.0f;
 			deltaSedimentGround[i] = 0.0f;
 		}
-		velocity = new Velocity[width*height] - 1;
-		flux = new FluxUnion[width*height] - 1;
+		velocity = new Velocity[width*height + 17] + 16;
+		flux = new FluxUnion[width*height + 17] + 16;
 		
 	}
 	Grid() {
 		width = height = 0;
-		dt = 0.01;
+		dt = 0.03;
 		crossSectionalAreaOfPipe = .6;
 		gravity = 9.81;
 		tileDimensionSize = 1;
@@ -77,12 +81,12 @@ struct Grid {
 		minimumSedimentCapacity = 0.1;
 	}
 	~Grid() {
-		if (ground) { delete[] ground; }
-		if (water) { delete[] water; }
-		if (sediment) { delete[] sediment; }
-		if (deltaSedimentGround) { delete[] deltaSedimentGround; }
-		if (velocity) { delete[] velocity; }
-		if (flux) { delete[] flux; }
+		if (ground) { delete[] (ground - 16); }
+		if (water) { delete[] (water - 16); }
+		if (sediment) { delete[] (sediment - 16); }
+		if (deltaSedimentGround) { delete[] (deltaSedimentGround - 16); }
+		if (velocity) { delete[] (velocity - 16); }
+		if (flux) { delete[] (flux - 16); }
 	}
 	
 	union {

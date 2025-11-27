@@ -601,8 +601,6 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 void Grid::FullCycle() {
 	++iter;
 	constexpr bool parallel = true;
-	constexpr bool useWater = true;
-	constexpr bool thermalErosion = true;
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(1, parallel, CalcOutflux);
 		FOR_EACH_SAFE_BORDERS(1, parallel, UpdateWaterLevelAndVelocity);
@@ -612,14 +610,14 @@ void Grid::FullCycle() {
 		FOR_EACH_SAFE_BORDERS(1, parallel, SedimentTransportation);
 		FOR_EACH_SAFE_BORDERS(0, parallel, SedimentTransportationUpdate);
 	}
-	if (thermalErosion) {
+	if (useThermalErosion) {
 		FOR_EACH_SAFE_BORDERS(1, parallel, ThermalErosionCalculation);
 		FOR_EACH_SAFE_BORDERS(0, parallel, ThermalErosionUpdate);
 	}
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(0, parallel, Evaporation);
 	}
-	if (true && iter % 47 == 0) {
+	if (useSmoothing && iter % 47 == 0) {
 		// TODO: replace with selectional smoothing, to smooth only where slope
 		// changes very rapidly
 		FOR_EACH_SAFE_BORDERS(1, parallel, Smooth);

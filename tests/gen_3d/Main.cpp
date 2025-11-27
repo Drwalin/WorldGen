@@ -20,7 +20,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 * 5;
+int width = 512 + 64;
 int height = width;
 
 float uniScale = 0.01;
@@ -61,6 +61,14 @@ volatile bool updateWaterHeights = true;
 
 int main(int argc, char **argv)
 {
+	width = argc > 2 ? atoi(argv[2]) : 512 + 64;
+	if (width < 512 + 64) {
+		width = 512+64;
+	}
+	if (width > 16384) {
+		width = 16384;
+	}
+	height = width;
 	const int maxMeshSize = argc > 1 ? atoi(argv[1]) : 512;
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
@@ -184,7 +192,7 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
-		printf("\r    fps: %.2f         (%i) hydro: %6.2f ms  (%6.2f ms)     mat = %Lf                            ", fps, HYDRO_ITER,
+		printf("\r    fps: %5.2f         (%6i) hydro: %7.2f ms  (%7.2f ms)     mat = %Lf                            ", fps, HYDRO_ITER,
 			   hydroErosionDuration, averageHydroIterationDuration, SUM_MATERIAL);
 		fflush(stdout);
 
@@ -343,36 +351,33 @@ void ThreadFunction()
 				 ++_y) {
 				for (int _x = chunk.x; _x < width && _x < chunk.x + CHUNK_SIZE;
 					 ++_x) {
-					float x = _x;
-					float y = _y;
+					glm::vec2 p{_x, _y};
+// 					p -= glm::vec2(2000, 1000);
+					p *= 0.6f;
+					p += 2700.0f;
+					p *= 0.5f;
+					
+					
 					const int i = _x + _y * width;
 					glm::vec3 v;
 
-					// 					x += 100 + 500;
-					// 					y += 100 + 500 + 300;
-					//
-					y += 750.f / SCALE;
+					p.y += 750.f / SCALE;
 
-					x += (simplex.Fbm(glm::vec2(-x / 53 + 100, y / 53 - 1000),
+					p.x += (simplex.Fbm(glm::vec2(-p.x / 53 + 100, p.y / 53 - 1000),
 									  3, 0.5, 2.3, false, false, 1.0f) -
 						  0.5) *
 						 10;
-					y += (simplex.Fbm(glm::vec2(+x / 53 - 1000, -y / 53 + 100),
+					p.y += (simplex.Fbm(glm::vec2(+p.x / 53 - 1000, -p.y / 53 + 100),
 									  3, 0.5, 2.3, false, false, 1.0f) -
 						  0.5) *
 						 10;
 
 					v.x =
-						simplex.Terrain(glm::vec2{x, y} * noiseHorizontalScale,
+						simplex.Terrain(glm::vec2{p.x, p.y} * noiseHorizontalScale,
 										horizontalScale);
-					// 					v.x =
-					// 						simplex.Noise(glm::vec2{x, y} *
-					// noiseHorizontalScale) * 						verticalScale;
 
 					maxH = std::max(maxH, v.x);
 
-					// 					v.x *= sqrt(v.x / verticalScale);
-					// 					v.x = sqrt(v.x * verticalScale);
 					float h = v.x * 600.0f;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
@@ -431,46 +436,48 @@ void HydroErosionIteration()
 		
 		const auto a = std::chrono::steady_clock::now();
 		
-		for (int i=0; i<width * pow(width, 0.2); ++i) {
-			int id = (mt()%(width*height)) + 1;
-			grid.water[id] += 0.01f;
-		}
-
-		if (HYDRO_ITER % 500 == 0) {
-			long double SUM = 0;
-			for (int _y = 0; _y < height; ++_y) {
-				for (int _x = 0; _x < width; ++_x) {
-					/*
-					const float x = _x;
-					const float y = _y;
-
-					const float _rain =
-						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
-						*2.0f - 0.5f;
-					
-					const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
-					
-					if (rain < 0) {
-						printf("rain = %f\n", rain);
-					}
-					*/
-					
-					int p = grid.At<false>(_x, _y);
-					
-					grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
-					
-					SUM += grid.ground[p][0] + grid.sediment[p];
-				}
+		if (grid.useWater) {
+			for (int i=0; i<width * pow(width, 0.2); ++i) {
+				int id = (mt()%(width*height)) + 1;
+				grid.water[id] += 0.01f;
 			}
-			SUM_MATERIAL = SUM;
-		}
-		
-		if (true) {
-			grid.water[grid.At<false>(1, 1)] += 0.1;
-			grid.water[grid.At<false>(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
-			for (int _y = 13; _y < 18; ++_y) {
-				for (int _x = 498; _x < 503; ++_x) {
-					grid.water[grid.At<false>(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
+
+			if (HYDRO_ITER % 500 == 0) {
+				long double SUM = 0;
+				for (int _y = 0; _y < height; ++_y) {
+					for (int _x = 0; _x < width; ++_x) {
+						/*
+						const float x = _x;
+						const float y = _y;
+
+						const float _rain =
+							simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
+							*2.0f - 0.5f;
+						
+						const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
+						
+						if (rain < 0) {
+							printf("rain = %f\n", rain);
+						}
+						*/
+						
+						int p = grid.At<false>(_x, _y);
+						
+						grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
+						
+						SUM += grid.ground[p][0] + grid.sediment[p];
+					}
+				}
+				SUM_MATERIAL = SUM;
+			}
+			
+			if (true) {
+				grid.water[grid.At<false>(1, 1)] += 0.1;
+				grid.water[grid.At<false>(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+				for (int _y = 13; _y < 18; ++_y) {
+					for (int _x = 498; _x < 503; ++_x) {
+						grid.water[grid.At<false>(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
+					}
 				}
 			}
 		}
