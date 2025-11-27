@@ -1,6 +1,7 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <random>
 
 #include <glm/fwd.hpp>
 #include <glm/geometric.hpp>
@@ -36,6 +37,8 @@ volatile float averageHydroIterationDuration = 0.0f;
 volatile bool disableSimulation = false;
 
 volatile long double SUM_MATERIAL = 0;
+
+std::mt19937_64 mt(std::random_device{}());
 
 struct Vertex {
 	float h;
@@ -387,8 +390,13 @@ void HydroErosionIteration()
 		}
 		
 		const auto a = std::chrono::steady_clock::now();
+		
+		for (int i=0; i<width * pow(width, 0.2); ++i) {
+			int id = (mt()%(width*height)) + 1;
+			grid.water[id] += 0.01f;
+		}
 
-		if (HYDRO_ITER % 11 == 0) {
+		if (HYDRO_ITER % 500 == 0) {
 			long double SUM = 0;
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
@@ -409,7 +417,7 @@ void HydroErosionIteration()
 					
 					int p = grid.At<false>(_x, _y);
 					
-					grid.water[p] += 0.001f * (HYDRO_ITER < 100 ? 50 : 1);//rain;
+					grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
 					
 					SUM += grid.ground[p][0] + grid.sediment[p];
 				}
@@ -418,11 +426,11 @@ void HydroErosionIteration()
 		}
 		
 		if (true) {
-			grid.water[grid.At<false>(1, 1)] += 4;
-			grid.water[grid.At<false>(1, 1)] += 20 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+			grid.water[grid.At<false>(1, 1)] += 0.1;
+			grid.water[grid.At<false>(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
 			for (int _y = 13; _y < 18; ++_y) {
 				for (int _x = 498; _x < 503; ++_x) {
-					grid.water[grid.At<false>(15, 500)] += 0.5 * pow(sin(HYDRO_ITER/35.0f) + 1.0f, 4);
+					grid.water[grid.At<false>(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
 				}
 			}
 		}

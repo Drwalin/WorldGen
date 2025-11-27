@@ -14,7 +14,7 @@ in float outWater;
 out vec4 FragColor;
 
 const float factorGrid = 0.0;
-const float heightScale = 500.0;
+const float heightScale = 350.0;
 
 void main()
 {

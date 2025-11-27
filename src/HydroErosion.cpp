@@ -618,7 +618,9 @@ void Grid::FullCycle() {
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(0, parallel, Evaporation);
 	}
-	if (false && iter % 1 == 0) {
+	if (true && iter % 77 == 0) {
+		// TODO: replace with selectional smoothing, to smooth only where slope
+		// changes very rapidly
 		FOR_EACH_SAFE_BORDERS(1, parallel, Smooth);
 		FOR_EACH_SAFE_BORDERS(0, parallel, SmoothUpdate);
 	}

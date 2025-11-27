@@ -76,7 +76,7 @@ struct Grid {
 		
 		depositionConstant = 0.03;
 		sedimentCapacityConstant = 0.03;
-		minimumSedimentCapacity = 0.1 * 0;
+		minimumSedimentCapacity = 0.1;
 	}
 	~Grid() {
 		if (ground) { delete[] ground; }
@@ -100,14 +100,6 @@ struct Grid {
 		float *suspendedSediment;
 		float *s;
 	};
-	
-	// tan(30) ~= 0.577
-	// tan(45) ~= 1
-	// tan(60) ~= 1.732
-	// tan(75) ~= 3.732
-	static constexpr float tangentOfAngleOfRecluse[2] = {3.732, 1};
-	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
-	
 	union {
 		float hardness[2] = {0.2, 0.1};
 		float Ks[2];
@@ -116,6 +108,14 @@ struct Grid {
 	float *deltaSedimentGround = nullptr;
 	Velocity *velocity = nullptr;
 	FluxUnion *flux = nullptr;
+	
+	
+	// tan(30) ~= 0.577
+	// tan(45) ~= 1
+	// tan(60) ~= 1.732
+	// tan(75) ~= 3.732
+	static constexpr float tangentOfAngleOfRecluse[2] = {2.3, 0.7};
+	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 30*
 	
 	
 	int width, height;
