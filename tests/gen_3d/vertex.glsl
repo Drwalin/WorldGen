@@ -1,8 +1,11 @@
 #version 430 core
 
-layout(location = 0) in float height;
-layout(location = 1) in vec4 color;
-layout(location = 2) in float water;
+// layout(location = 0) in float height;
+// layout(location = 1) in vec4 color;
+// layout(location = 2) in float water;
+
+uniform sampler2D colorTex;
+uniform sampler2D heightTex;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -22,6 +25,14 @@ void main()
 {
 	int x = gl_VertexID % size.x;
 	int z = gl_VertexID / size.x;
+	
+	vec2 coord = vec2(x, z) / (size-1);
+	
+	vec2 heights = texture(heightTex, coord).xy;
+	float height = heights.x;
+	vec4 color = texture(colorTex, coord);;
+	float water = heights.y;
+	
 	_in_intPos = vec3(x, (height + water * float(useWater)), z);
 	_in_pos = vec3(x * scale.x, (height + water * float(useWater)) * scale.y, z * scale.z);
 	gl_Position = projection * view * model * vec4(_in_pos * renderScaleVec, 1);

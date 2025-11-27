@@ -13,8 +13,8 @@
 #include "../../../OpenGLWrapper/include/openglwrapper/VAO.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/OpenGL.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Shader.hpp"
+#include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
 // #include "../../../OpenGLWrapper/include/openglwrapper/Sync.hpp"
-// #include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
 // #include "../../../OpenGLWrapper/include/openglwrapper/BufferAccessor.hpp"
 
 #include "../../include/worldgen/HydroErosion.hpp"
@@ -35,23 +35,29 @@ float noiseHorizontalScale = 1.0f / 4000.0f * SCALE;
 volatile int HYDRO_ITER = 0;
 volatile float averageHydroIterationDuration = 0.0f;
 volatile bool disableSimulation = false;
+volatile bool updateColorsTexture = false;
 
 volatile long double SUM_MATERIAL = 0;
 
 std::mt19937_64 mt(732168281);
 
-struct Vertex {
-	float h;
-	uint8_t rgba[4];
-	float w;
+struct VertexHeights {
+	float h = 0;
+	float w = 0;
 };
-Vertex *verts;
+VertexHeights *vertHeights = nullptr;
+
+struct VertexColors {
+	uint8_t rgba[4] = {0, 0, 0, 1};
+};
+VertexColors *vertColors = nullptr;
+
 
 void ThreadFunction();
 
 volatile float hydroErosionDuration = 0;
 volatile bool updateHeights = true;
-volatile bool updateWaterHeights = false;
+volatile bool updateWaterHeights = true;
 
 int main(int argc, char **argv)
 {
@@ -67,22 +73,33 @@ int main(int argc, char **argv)
 	// Generate index data
 	gl::VBO ebo(sizeof(uint32_t), gl::ELEMENT_ARRAY_BUFFER, gl::DYNAMIC_DRAW);
 	ebo.Init();
+	
+	gl::Texture heightsTexture, colorsTexture;
+	heightsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RG32F);
+	colorsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RGBA8);
+	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TO_BORDER);
+	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TO_BORDER);
+	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
+	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
 
 	{
 		std::vector<uint32_t> Ebo;
 		Ebo.reserve(3 * 2 * (width - 1) * (height - 1));
-		for (int y = 0; y + 1 < height; ++y) {
+		int yStride = 8;
+		for (int Y = 0; Y + 1 < height; Y+=yStride) {
 			for (int x = 0; x + 1 < width; ++x) {
-				int id0 = x + y * width;
-				int id1 = id0 + 1;
-				int id2 = id0 + width;
-				int id3 = id1 + width;
-				Ebo.push_back(id0);
-				Ebo.push_back(id1);
-				Ebo.push_back(id2);
-				Ebo.push_back(id2);
-				Ebo.push_back(id1);
-				Ebo.push_back(id3);
+				for (int y = Y; y + 1 < height && y < Y+yStride; ++y) {
+					int id0 = x + y * width;
+					int id1 = id0 + 1;
+					int id2 = id0 + width;
+					int id3 = id1 + width;
+					Ebo.push_back(id0);
+					Ebo.push_back(id1);
+					Ebo.push_back(id2);
+					Ebo.push_back(id2);
+					Ebo.push_back(id1);
+					Ebo.push_back(id3);
+				}
 			}
 		}
 		// Generate VBO from vertex data
@@ -90,46 +107,32 @@ int main(int argc, char **argv)
 	}
 
 	// Generate vertex data
-	gl::VBO vbo(2 * sizeof(float) + 4 * sizeof(uint8_t), gl::ARRAY_BUFFER,
-				gl::DYNAMIC_DRAW);
-	verts = (Vertex*)vbo.InitMapPersistent(nullptr, width*height, 
-// 					gl::DYNAMIC_STORAGE_BIT |
-					gl::MAP_READ_BIT |
-					gl::MAP_WRITE_BIT
-// 					gl::MAP_PERSISTENT_BIT
-// 					gl::MAP_COHERENT_BIT |
-// 					gl::CLIENT_STORAGE_BIT
-			);
-// 	verts = new Vertex[width * height];
-// 	vbo.Init(width * height);
-// 	vbo.Generate(verts, width * height);
+	vertHeights = new VertexHeights[width*height];
+	vertColors = new VertexColors[width*height];
 
 	std::thread(ThreadFunction).detach();
 
 	// Initiate VAO with VBO attributes
 	gl::VAO vao(gl::TRIANGLES);
 	vao.Init();
-	vao.SetAttribPointer(vbo, shader.GetAttributeLocation("height"), 1,
-						 gl::FLOAT, false, 0);
-	vao.SetAttribPointer(vbo, shader.GetAttributeLocation("color"), 4,
-						 gl::UNSIGNED_BYTE, true, 4);
-	vao.SetAttribPointer(vbo, shader.GetAttributeLocation("water"), 1,
-						 gl::FLOAT, false, 8);
 	vao.BindElementBuffer(ebo, gl::DataType::UNSIGNED_INT);
 
 	// Get uniform locations
-	int modelLoc = shader.GetUniformLocation("model");
-	int viewLoc = shader.GetUniformLocation("view");
-	int projLoc = shader.GetUniformLocation("projection");
-	int useWaterLoc = shader.GetUniformLocation("useWater");
-	int gridWidthLoc = shader.GetUniformLocation("gridWidth");
+	const int modelLoc = shader.GetUniformLocation("model");
+	const int viewLoc = shader.GetUniformLocation("view");
+	const int projLoc = shader.GetUniformLocation("projection");
+	const int useWaterLoc = shader.GetUniformLocation("useWater");
+	const int gridWidthLoc = shader.GetUniformLocation("gridWidth");
+	const int colorTexLoc = shader.GetUniformLocation("colorTex");
+	const int heightTexLoc = shader.GetUniformLocation("heightTex");
+	
+	shader.SetTexture(colorTexLoc, &colorsTexture, 0);
+	shader.SetTexture(heightTexLoc, &heightsTexture, 1);
 
 	shader.Use();
 	glUniform2iv(shader.GetUniformLocation("size"), 1,
 				 std::vector<int32_t>{width, height}.data());
 	GL_CHECK_PUSH_ERROR;
-	// 	shader.SetVec2(shader.GetUniformLocation("size"),
-	// (*(glm::vec2*)(std::vector<int32_t>{width, height}.data())));
 	shader.SetVec3(shader.GetUniformLocation("scale"),
 				   glm::vec3(horizontalScale, verticalScale, horizontalScale));
 	shader.SetInt(gridWidthLoc, width);
@@ -142,6 +145,9 @@ int main(int argc, char **argv)
 	int frames = 0;
 	float fps = 0;
 	bool disableRender = false;
+	
+	auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+	
 	while (!glfwWindowShouldClose(gl::openGL.window)) {
 		
 		++frames;
@@ -163,8 +169,8 @@ int main(int argc, char **argv)
 		if (gl::openGL.IsKeyDown('U')) {
 			updateHeights = true;
 		}
-		if (gl::openGL.IsKeyDown('I')) {
-			updateWaterHeights = true;
+		if (gl::openGL.WasKeyPressed('I')) {
+			updateWaterHeights ^= true;
 		}
 		
 		if (gl::openGL.WasKeyPressed('O')) {
@@ -175,30 +181,19 @@ int main(int argc, char **argv)
 		}
 
 		{
-// 			constexpr int div = 32;
-// 			static int count = 0;
-// 			const int n = width * height;
-// 			++count;
+			if (updateColorsTexture) {
+				updateColorsTexture = false;
+				colorsTexture.Update2((const void*)vertColors, 0, 0, width, height, 0, gl::TextureDataFormat::RGBA, gl::DataType::UNSIGNED_BYTE);
+			}
 			
-// 			if (count % 32 == 0)
-// 			{
-// 				vbo.Update(verts, 0, n * sizeof(Vertex));
-				
-// 				int mod = count % div;
-// 				int of = (n * mod) / div;
-// 				int ofn = ((n+1) * mod) / div;
-// 				if (ofn >  n) {
-// 					ofn = n;
-// 				}
-// 				int e = ofn - of;
-// 				
-// 				int bof = of * sizeof(Vertex);
-				
-// 				if (mod < 5) {
-// 					vbo.Update(verts + of, bof, e * sizeof(Vertex));
-// 				}
-// 				gl::Finish();
-// 			}
+			if (updateWaterHeights || updateHeights) {
+				const auto now = std::chrono::steady_clock::now();
+				auto dur = (now - lastUpdateHeightsTexture);
+				if (dur > std::chrono::milliseconds(500)) {
+					lastUpdateHeightsTexture = now;
+					heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
+				}
+			}
 		}
 
 		// Use shader
@@ -256,7 +251,7 @@ glm::ivec3 ColorGradient(int x, int y)
 {
 	thread_local wg::SimplexNoise colorSimplex(12342312);
 
-	float n = colorSimplex.Noise2(glm::vec3{x * 10, 00, y * 10});
+	float n = colorSimplex.Noise2(glm::vec3{x, 0, y} * 30.0f);
 
 	glm::vec3 c = {n, n, n};
 	c = glm::vec3(n * 230.0f);
@@ -269,13 +264,6 @@ Grid grid;
 
 void ThreadFunction()
 {
-	for (int x = 0; x < width; ++x) {
-		for (int y = 0; y < height; ++y) {
-			int i = x + y * width;
-			verts[i] = {0, {0, 0, 0, 1}, 0};
-		}
-	}
-
 	wg::SimplexNoise simplex(1234);
 
 	int CHUNK_SIZE = 128;
@@ -338,8 +326,8 @@ void ThreadFunction()
 					float h = v.x * 600.0f;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
-					verts[i] = {h,
-								{(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, 0};
+					vertColors[i] = {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 255};
+					vertHeights[i] = {h, 0};
 				}
 			}
 		}
@@ -361,12 +349,14 @@ void ThreadFunction()
 		std::this_thread::sleep_for(std::chrono::milliseconds(60));
 	}
 	printf("\r Done!                         \n");
+	updateColorsTexture = true;
 
 	HydroErosionIteration();
 }
 
 void HydroErosionIteration()
 {
+	auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 	grid.Init(width, height);
 	wg::SimplexNoise simplex(432127);
 
@@ -376,7 +366,7 @@ void HydroErosionIteration()
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t][0] = verts[i].h * HYDRO_EROSION_Y_SCALE - 0.5f;
+				grid.ground[t][0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - 0.5f;
 				grid.ground[t][1] = 0.5f;
 			}
 		}
@@ -441,43 +431,53 @@ void HydroErosionIteration()
 // 		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
 		if (updateHeights) {
-			updateHeights = false;
-			for (int _y = 0; _y < height; ++_y) {
-				for (int _x = 0; _x < width; ++_x) {
-					const int i = _x + _y * width;
-					const int t = grid.At<false>(_x, _y);
-					float h = grid.ground[t][0];// + grid.water[t] + grid.sediment[i];
-// 					float h = t->sediment;
-					h /= HYDRO_EROSION_Y_SCALE;
-					
-					if (h > -10000 && h < 50000) {
-					} else {
-						h = 0;
+			const auto now = std::chrono::steady_clock::now();
+			auto dur = (now - lastUpdateHeightsTexture);
+			if (dur > std::chrono::milliseconds(240)) {
+				lastUpdateHeightsTexture = now;
+				updateHeights = false;
+				for (int _y = 0; _y < height; ++_y) {
+					for (int _x = 0; _x < width; ++_x) {
+						const int i = _x + _y * width;
+						const int t = grid.At<false>(_x, _y);
+						float h = grid.ground[t][0];// + grid.water[t] + grid.sediment[i];
+	// 					float h = t->sediment;
+						h /= HYDRO_EROSION_Y_SCALE;
+						
+						if (h > -10000 && h < 50000) {
+						} else {
+							h = 0;
+						}
+						
+						vertHeights[i].h = h;
+						vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
 					}
-					
-					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, grid.water[t] / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
 
 		if (updateWaterHeights) {
-			updateWaterHeights = false;
-			for (int _y = 0; _y < height; ++_y) {
-				for (int _x = 0; _x < width; ++_x) {
-					const int i = _x + _y * width;
-					const int t = grid.At<false>(_x, _y);
-					float h = grid.ground[t].Total();//grid.water[t];// + grid.ground[t].Total() + grid.sediment[i];
-// 					float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[i];
-					h /= HYDRO_EROSION_Y_SCALE;
-					
-					if (h > -10000 && h < 50000) {
-					} else {
-						h = 0;
+			const auto now = std::chrono::steady_clock::now();
+			auto dur = (now - lastUpdateHeightsTexture);
+			if (dur > std::chrono::milliseconds(240)) {
+				lastUpdateHeightsTexture = now;
+// 				updateWaterHeights = false;
+				for (int _y = 0; _y < height; ++_y) {
+					for (int _x = 0; _x < width; ++_x) {
+						const int i = _x + _y * width;
+						const int t = grid.At<false>(_x, _y);
+						float h = grid.ground[t].Total();//grid.water[t];// + grid.ground[t].Total() + grid.sediment[i];
+// 						float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[i];
+						h /= HYDRO_EROSION_Y_SCALE;
+						
+						if (h > -10000 && h < 50000) {
+						} else {
+							h = 0;
+						}
+						
+						vertHeights[i].h = h;
+						vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
 					}
-					
-					glm::ivec3 c = ColorGradient(_x, _y);
-					verts[i] = {h, {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 1}, grid.water[t] / HYDRO_EROSION_Y_SCALE};
 				}
 			}
 		}
