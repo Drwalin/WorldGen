@@ -20,7 +20,7 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
-int width = 512 + 64;
+int width = 512 * 5;
 int height = width;
 
 float uniScale = 0.01;
@@ -61,6 +61,10 @@ volatile bool updateWaterHeights = true;
 
 int main(int argc, char **argv)
 {
+	const int maxMeshSize = argc > 1 ? atoi(argv[1]) : 512;
+	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
+	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
+	
 	DefaultsSetup();
 
 	// Load shader
@@ -74,25 +78,45 @@ int main(int argc, char **argv)
 	gl::VBO ebo(sizeof(uint32_t), gl::ELEMENT_ARRAY_BUFFER, gl::DYNAMIC_DRAW);
 	ebo.Init();
 	
+	vertHeights = new VertexHeights[width*height];
+	vertColors = new VertexColors[width*height];
+	
 	gl::Texture heightsTexture, colorsTexture;
+	
+// 	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
+// 	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
+// 	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
+// 	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
+// 	
 	heightsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RG32F);
 	colorsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RGBA8);
-	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TO_BORDER);
-	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TO_BORDER);
+	
+// 	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
+// 	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
+// 	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
+// 	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
+// 	
+	colorsTexture.Update2((const void*)vertColors, 0, 0, width, height, 0, gl::TextureDataFormat::RGBA, gl::DataType::UNSIGNED_BYTE);
+	heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
+	
+	bool filterWrapTextureSet = false;
+	
+	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
+	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
 	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
 	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
 
 	{
 		std::vector<uint32_t> Ebo;
-		Ebo.reserve(3 * 2 * (width - 1) * (height - 1));
+		Ebo.reserve(3 * 2 * (meshWidth - 1) * (meshHeight - 1));
 		int yStride = 8;
-		for (int Y = 0; Y + 1 < height; Y+=yStride) {
-			for (int x = 0; x + 1 < width; ++x) {
-				for (int y = Y; y + 1 < height && y < Y+yStride; ++y) {
-					int id0 = x + y * width;
+		for (int Y = 0; Y + 1 < meshHeight; Y+=yStride) {
+			for (int x = 0; x + 1 < meshWidth; ++x) {
+				for (int y = Y; y + 1 < meshHeight && y < Y+yStride; ++y) {
+					int id0 = x + y * meshWidth;
 					int id1 = id0 + 1;
-					int id2 = id0 + width;
-					int id3 = id1 + width;
+					int id2 = id0 + meshWidth;
+					int id3 = id1 + meshWidth;
 					Ebo.push_back(id0);
 					Ebo.push_back(id1);
 					Ebo.push_back(id2);
@@ -105,10 +129,6 @@ int main(int argc, char **argv)
 		// Generate VBO from vertex data
 		ebo.Generate(Ebo.data(), Ebo.size());
 	}
-
-	// Generate vertex data
-	vertHeights = new VertexHeights[width*height];
-	vertColors = new VertexColors[width*height];
 
 	std::thread(ThreadFunction).detach();
 
@@ -125,6 +145,9 @@ int main(int argc, char **argv)
 	const int gridWidthLoc = shader.GetUniformLocation("gridWidth");
 	const int colorTexLoc = shader.GetUniformLocation("colorTex");
 	const int heightTexLoc = shader.GetUniformLocation("heightTex");
+	const int meshSizeLoc = shader.GetUniformLocation("meshSize");
+	const int cameraPosLoc = shader.GetUniformLocation("cameraPos");
+	const int centerOffsetLoc = shader.GetUniformLocation("centerOffset");
 	
 	shader.SetTexture(colorTexLoc, &colorsTexture, 0);
 	shader.SetTexture(heightTexLoc, &heightsTexture, 1);
@@ -132,6 +155,7 @@ int main(int argc, char **argv)
 	shader.Use();
 	glUniform2iv(shader.GetUniformLocation("size"), 1,
 				 std::vector<int32_t>{width, height}.data());
+	glUniform2iv(meshSizeLoc, 1, std::vector<int32_t>{meshWidth, meshHeight}.data());
 	GL_CHECK_PUSH_ERROR;
 	shader.SetVec3(shader.GetUniformLocation("scale"),
 				   glm::vec3(horizontalScale, verticalScale, horizontalScale));
@@ -192,6 +216,14 @@ int main(int argc, char **argv)
 				if (dur > std::chrono::milliseconds(500)) {
 					lastUpdateHeightsTexture = now;
 					heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
+					if (filterWrapTextureSet == false) {
+						filterWrapTextureSet = true;
+
+						heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
+						heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
+						heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
+						heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
+					}
 				}
 			}
 		}
@@ -216,14 +248,32 @@ int main(int argc, char **argv)
 		shader.SetMat4(viewLoc, view);
 		shader.SetMat4(projLoc, projection);
 		shader.SetMat4(modelLoc, model);
+		{
+			glm::vec3 cp = camera.position * 10.0f;
+			shader.SetVec3(cameraPosLoc, camera.position * 10.0f);
+			glm::ivec2 of = {cp.x, cp.z};
+			if (of.x < meshWidth/2) {
+				of.x = meshWidth/2;
+			} else if (of.x > width-meshWidth/2 - 1) {
+				of.x = width-meshWidth/2 - 1;
+			}
+			if (of.y < meshHeight/2) {
+				of.y = meshHeight/2;
+			} else if (of.y > height-meshHeight/2 - 1) {
+				of.y = height-meshHeight/2 - 1;
+			}
+			shader.SetVec2(centerOffsetLoc, glm::vec2(of) / (glm::vec2(width, height)));
+		}
 
 		// Draw VAO
 		if (disableRender == false) {
+			/*
 			if (width > 1600) {
 				glDepthMask(true);
 				shader.SetInt(useWaterLoc, 1);
 				vao.Draw();
 			} else {
+			*/
 				shader.SetInt(useWaterLoc, 0);
 				glDepthMask(true);
 				vao.Draw();
@@ -231,7 +281,7 @@ int main(int argc, char **argv)
 				glDepthMask(false);
 				vao.Draw();
 				glDepthMask(true);
-			}
+			//}
 		}
 
 		DefaultIterationEnd();

@@ -529,7 +529,7 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 	};
 	{
 		int threadsCount =
-			std::max(((int)std::thread::hardware_concurrency()) - 4, 0) / 2;
+			std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
 		while (threads.size() < threadsCount) {
 			threads.push_back(std::thread(
 						[](){
