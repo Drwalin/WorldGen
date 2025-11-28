@@ -17,7 +17,8 @@ in vec3 triangleVert0Pos;
 
 out vec4 FragColor;
 
-const float heightScale = 350.0;
+const float _heightScale = 350.0;
+uniform float generatorYScale = 1.0;
 
 
 vec3 CalcNormal(vec2 coords) {
@@ -42,6 +43,8 @@ vec3 CalcNormal(vec2 coords) {
 
 void main()
 {
+	float heightScale = _heightScale * generatorYScale;
+	
 	vec2 hw = texture(heightTex, uv).xy;
 	vec3 normal = CalcNormal(uv);
 	vec4 out_color = texture(colorTex, uv);

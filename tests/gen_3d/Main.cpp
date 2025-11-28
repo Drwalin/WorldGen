@@ -24,6 +24,9 @@ int width = 512 + 64;
 int height = width;
 int riverSourcesCount = 4;
 
+float generatorYScale = 1.0;
+float SOFT_LAYER = 0.1;
+
 float uniScale = 0.01;
 
 float SCALE = 10;
@@ -60,6 +63,26 @@ volatile float hydroErosionDuration = 0;
 volatile bool updateHeights = true;
 volatile bool updateWaterHeights = true;
 
+float clamp(float v, float min, float max)
+{
+	if (v < min) {
+		return v;
+	} else if (v > max) {
+		return max;
+	}
+	return v;
+}
+
+int clamp(int v, int min, int max)
+{
+	if (v < min) {
+		return v;
+	} else if (v > max) {
+		return max;
+	}
+	return v;
+}
+
 int main(int argc, char **argv)
 {
 	width = argc > 2 ? atoi(argv[2]) : 512 + 64;
@@ -70,7 +93,9 @@ int main(int argc, char **argv)
 		width = 16384;
 	}
 	height = width;
-	riverSourcesCount = argc > 3 ? std::min(std::max(atoi(argv[3]), 0), 1000) : 4;
+	riverSourcesCount = argc > 3 ? clamp(atoi(argv[3]), 0, 1000) : 4;
+	generatorYScale = argc > 4 ? clamp((float)atof(argv[4]), 0.001f, 100.0f) : 1.0f;
+	SOFT_LAYER = argc > 5 ? clamp((float)atof(argv[4]), 0.0f, 1000.0f) : 1.0f;
 	const int maxMeshSize = argc > 1 ? atoi(argv[1]) : 512;
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
@@ -88,8 +113,8 @@ int main(int argc, char **argv)
 	gl::VBO ebo(sizeof(uint32_t), gl::ELEMENT_ARRAY_BUFFER, gl::DYNAMIC_DRAW);
 	ebo.Init();
 	
-	vertHeights = new VertexHeights[width*height];
-	vertColors = new VertexColors[width*height];
+	vertHeights = new VertexHeights[width*height]({0.0f, 0.0f});
+	vertColors = new VertexColors[width*height]({0, 0, 0, 255});
 	
 	gl::Texture heightsTexture, colorsTexture;
 	
@@ -158,6 +183,9 @@ int main(int argc, char **argv)
 	const int meshSizeLoc = shader.GetUniformLocation("meshSize");
 	const int cameraPosLoc = shader.GetUniformLocation("cameraPos");
 	const int centerOffsetLoc = shader.GetUniformLocation("centerOffset");
+	const int generatorYScaleLoc = shader.GetUniformLocation("generatorYScale");
+	
+	shader.SetFloat(generatorYScaleLoc, generatorYScale);
 	
 	shader.SetTexture(colorTexLoc, &colorsTexture, 0);
 	shader.SetTexture(heightTexLoc, &heightsTexture, 1);
@@ -311,7 +339,7 @@ glm::ivec3 ColorGradient(int x, int y)
 {
 	thread_local wg::SimplexNoise colorSimplex(12342312);
 
-	float n = colorSimplex.Noise2(glm::vec3{x, 0, y} * 30.0f);
+	float n = colorSimplex.Noise2(glm::vec3{x, 0, y} * 130.0f);
 
 	glm::vec3 c = {n, n, n};
 	c = glm::vec3(n * 230.0f);
@@ -360,7 +388,7 @@ void ThreadFunction()
 					p *= 0.5f;
 					
 					
-					const int i = _x + _y * width;
+					const int i = _x * height + _y;
 					glm::vec3 v;
 
 					p.y += 750.f / SCALE;
@@ -380,7 +408,7 @@ void ThreadFunction()
 
 					maxH = std::max(maxH, v.x);
 
-					float h = v.x * 600.0f;
+					float h = v.x * 600.0f * generatorYScale;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
 					vertColors[i] = {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 255};
@@ -433,8 +461,8 @@ void HydroErosionIteration()
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t].layers[0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - 0.1f;
-				grid.ground[t].layers[1] = 0.1f;
+				grid.ground[t].layers[0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - SOFT_LAYER;
+				grid.ground[t].layers[1] = SOFT_LAYER;
 				if (_x > 64 && _x < width - 64 && _y > 64 && _y < height - 64) {
 					if (vertHeights[i].h > vertHeights[maxHeight].h) {
 						maxHeight = i;

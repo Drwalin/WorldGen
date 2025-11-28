@@ -12,61 +12,21 @@
  *    sand with water: 15* - 30*    // maybe can be used for sediment
  */
 
-
 #if not defined EROSION_STRUCTS_DEFINED
 #define EROSION_STRUCTS_DEFINED
 struct Flux {
-	float f[4]; // = {0,0,0,0};
+	float f[4];
 };
 
 struct Velocity {
-	float x; // = 0;
-	float y; // = 0;
+	float x;
+	float y;
 };
 
 struct GroundLayers {
 	float layers[2];
 };
 #endif
-
-
-
-/*
-struct Flux {
-	float L;
-	float B;
-	float R;
-	float T;
-};
-
-struct FluxUnion {
-	FluxUnion() {
-		f.L = f.B = f.R = f.T = 0;
-	}
-	union {
-		Flux f;
-		float fluxArray[4];
-	};
-};
-
-struct Velocity {
-	float x = 0.0f, y = 0.0f;
-};
-
-struct GroundLayers {
-	float layers[2] = {0.0f, 0.0f};
-	float &operator[](int layer) { return layers[layer]; }
-	float operator[](int layer) const { return layers[layer]; }
-	inline float Total() const { return layers[0] + layers[1]; }
-	inline void AddGeneral(float dv) {
-		layers[1] += dv;
-		if (layers[1] < 0.0f) {
-			layers[0] += layers[1];
-			layers[1] = 0.0f;
-		}
-	}
-};
-*/
 
 struct Grid {
 	bool useWater = true;
@@ -83,13 +43,19 @@ struct Grid {
 		water = new float[width*height + OFF + 1] + OFF;
 		sediment = new float[width*height + OFF + 1] + OFF;
 		deltaSedimentGround = new float[width*height + OFF + 1] + OFF;
+		velocity = new Velocity[width*height + OFF + 1] + OFF;
+		flux = new Flux[width*height + OFF + 1] + OFF;
 		for (int i=1; i<=width*height; ++i) {
 			water[i] = 0.0f;
 			sediment[i] = 0.0f;
 			deltaSedimentGround[i] = 0.0f;
+			flux[i].f[0] = 0;
+			flux[i].f[1] = 0;
+			flux[i].f[2] = 0;
+			flux[i].f[3] = 0;
+			ground[i].layers[0] = 0;
+			ground[i].layers[1] = 0;
 		}
-		velocity = new Velocity[width*height + OFF + 1] + OFF;
-		flux = new Flux[width*height + OFF + 1] + OFF;
 	}
 	Grid() {
 		width = height = 0;

@@ -387,7 +387,7 @@ inline void ThermalErosionUpdate(int x, int y)
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.03; // Make it dependent on temperature in place (x,y)
+	return 0.01; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)
