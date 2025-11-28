@@ -1,4 +1,4 @@
-#include <cmath>
+// #include <cmath>
 #include <cassert>
 
 #include <chrono>
@@ -8,11 +8,19 @@
 #include <functional>
 
 #include "../include/worldgen/HydroErosion.hpp"
-#include "../include/worldgen/HydroErosionMacros.hpp"
+// #include "../include/worldgen/HydroErosionMacros.hpp"
+
+#include "HydroErosionPure.hpp"
 
 std::atomic<float> f;
 
 int a = (f += 1.31, 0);
+
+
+/*
+inline float Grid::SumFlux(int t) {
+	return flux[t].f[0] + flux[t].f[1] + flux[t].f[2] + flux[t].f[3];
+}
 
 template<bool safe, int dir>
 inline float Grid::CalcFluxInDirection(int src, int neigh) const {
@@ -27,7 +35,7 @@ inline float Grid::CalcFluxInDirection(int src, int neigh) const {
 }
 
 inline void Grid::LimitFlux(int src) {
-	const float outflux = flux[src].f.L + flux[src].f.B + flux[src].f.R + flux[src].f.T;
+	const float outflux = SumFlux(src);
 	const float water = this->water[src] * l*l;
 	if(outflux <= 0.001) {
 		FOR_EACH_DIR({flux[src].fluxArray[DIR] = 0.0f;});
@@ -41,16 +49,21 @@ inline void Grid::LimitFlux(int src) {
 		FOR_EACH_DIR({flux[src].fluxArray[DIR] *= K;});
 	}
 }
+*/
 
 template<bool safe>
 void Grid::CalcOutflux(int x, int y) {
+	HydroPure::CalcOutflux(x, y);
+	/*
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	
 	FOR_EACH_DIR_SAFE_COND(neighs[DIR], (flux[src].fluxArray[DIR] = CalcFluxInDirection<safe, DIR>(src, neighs[DIR])));
 	LimitFlux(src);
+	*/
 }
 
+/*
 template<bool safe>
 void Grid::UpdateWaterLevel(int src, int* neighs) {
 	float fs = 0;
@@ -60,9 +73,12 @@ void Grid::UpdateWaterLevel(int src, int* neighs) {
 		water[src] = 0;
 	}
 }
+*/
 
 template<bool safe>
 void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
+	HydroPure::UpdateWaterLevelAndVelocity(x, y);
+	/*
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	float water_level = water[src];
@@ -80,15 +96,10 @@ void Grid::UpdateWaterLevelAndVelocity(int x, int y) {
 	SAFE_COND_GRID(neighs[3], dWy += flux[neighs[3]].fluxArray[1] - flux[src].fluxArray[3]);
 	velocity[src].x = dWx / (water_level * l);
 	velocity[src].y = dWy / (water_level * l);
-	
-// 	if ( x < 9 && y < 9 && x > 5 && y > 5) {
-// 		if ( x == 6 && y == 6) {
-// 			printf("\n\n");
-// 		}
-// 		printf("dWX = %f     dWY = %f     wl*l = %f\n", dWx, dWy, water_level*l);
-// 	}
+	*/
 }
 
+/*
 template<bool safe>
 inline float Grid::SinusLocalTiltAngle(int t, int x, int y) {
 	float xl, yl;
@@ -108,9 +119,12 @@ inline float Grid::SinusLocalTiltAngle(int t, int x, int y) {
 	const float s = dhdx*dhdx + dhdy*dhdy;
 	return sqrt(s) / sqrt(1.0f + s);
 }
+*/
 
 template<bool safe>
 inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
+	HydroPure::ErosionAndDepositionCalculation(x, y);
+	/*
 	int src = At<false>(x, y);
 	const float sinusLocalTiltAngle = SinusLocalTiltAngle<safe>(src, x, y);
 	const float v = sqrt(velocity[src].x * velocity[src].x + velocity[src].y * velocity[src].y);
@@ -131,280 +145,62 @@ inline void Grid::ErosionAndDepositionCalculation(int x, int y) {
 			f = ground[src][1] + f2;
 		}
 		deltaSedimentGround[src] = f;
-		if (sediment[src] + deltaSedimentGround[src] < 0.0f && sediment[src] >= 0.0f) {
-			printf(" PICK cap = %f   sed = %f    srcDelta = %f     delta = %f     result = %f\n", capacity,
-					sediment[src], deltaSedimentGround[src], delta, sediment[src] + deltaSedimentGround[src]);
-		}
 	} else {
 		// depositing sediment
 		deltaSedimentGround[src] = Kd * delta;
-		if (sediment[src] + deltaSedimentGround[src] < 0.0f && sediment[src] >= 0.0f) {
-			printf(" DEP cap = %f   sed = %f    srcDelta = %f     delta = %f     result = %f\n", capacity,
-					sediment[src], deltaSedimentGround[src], delta, sediment[src] + deltaSedimentGround[src]);
-		}
 	}
+	*/
 }
 
 template<bool safe>
 inline void Grid::ErosionAndDepositionUpdate(int x, int y) {
+	HydroPure::ErosionAndDepositionUpdate(x, y);
+	/*
 	int src = At<false>(x, y);
 	float ds = deltaSedimentGround[src];
 	ground[src].AddGeneral(-ds);
 	sediment[src] += ds;
 	deltaSedimentGround[src] = 0;
-	
-// 	if (src.sediment < 0.0f) {
-// 		printf("SDUP(%.16f)\n", src.sediment);
-// 	}
-}
-
-inline float Grid::SumFlux(int t) {
-	return flux[t].f.L + flux[t].f.B + flux[t].f.R + flux[t].f.T;
+	*/
 }
 
 template<bool safe>
 inline void Grid::SedimentTransportation(int x, int y) {
+	HydroPure::SedimentTransportation(x, y);
+	/*
 	int src = At<false>(x, y);
-	switch(5) {
-	case 0: {
-		const float sx = (x - velocity[src].x*dt)/l;
-		const float sy = (y - velocity[src].y*dt)/l;
-		
-		const int SX = floor(sx);
-		const int SY = floor(sy);
-		
-// 		if(SX < 0)
-// 			return;
-// 		if(SX+1 >= width)
-// 			return;
-// 		if(SY < 0)
-// 			return;
-// 		if(SY+1 >= height)
-// 			return;
-		
-		int a00 = At<safe>(SX, SY);
-		int a10 = At<safe>(SX+1, SY);
-		int a11 = At<safe>(SX+1, SY+1);
-		int a01 = At<safe>(SX, SY+1);
-		
-		const float rx = sx - SX;
-		const float ry = sy - SY;
-		
-		const float ds00 = 0.25f * (a00==0 ? 0.0f : sediment[a00]) * (1.0f-rx) * (1.0f-ry);
-		const float ds10 = 0.25f * (a10==0 ? 0.0f : sediment[a10]) * (rx) * (1.0f-ry);
-		const float ds01 = 0.25f * (a01==0 ? 0.0f : sediment[a01]) * (1.0f-rx) * (ry);
-		const float ds11 = 0.25f * (a11==0 ? 0.0f : sediment[a11]) * (rx) * (ry);
-		
-		const static auto F = +[](float v)->bool{ return v >= 0.0f && v <= 1.0f; };
-		assert(F(rx));
-		assert(F(1.0f-rx));
-		assert(F(ry));
-		assert(F(1.0f-ry));
-		
-		if (a00) sediment[a00] -= ds00;
-		if (a10) sediment[a10] -= ds10;
-		if (a01) sediment[a01] -= ds01;
-		if (a11) sediment[a11] -= ds11;
-		
-		sediment[src] += ds00 + ds10 + ds01 + ds11;
-	} break;
-	case 1: {
-		NEIGHBOURS(neighs, x, y);
-		FOR_EACH_DIR_SAFE_COND(neighs[DIR],
-			{
-				const float sum = SumFlux(neighs[DIR]) * 16.0f;
-				if (sum > 0.0f) {
-					const float neighSed = sediment[neighs[DIR]];
-					const float incomingFlux = flux[neighs[DIR]].fluxArray[R_DIR];
-					const float dV = neighSed * incomingFlux / sum;
-					deltaSedimentGround[src] += dV;
-					deltaSedimentGround[neighs[DIR]] -= dV;
-				}
-			});
-	} break;
-	case 2: {
-		float vx = velocity[src].x;
-		float vy = velocity[src].y;
-		float avx = vx < 0.0f ? -vx : vx;
-		float avy = vy < 0.0f ? -vy : vy;
-		
-		const float maxv = avx > avy ? avx : avy;
-		const float minv = avx < avy ? avx : avy;
-		
-		if (maxv > 0.0001f) {
-		} else {
-			break;
-		}
-		
-		const int dvx = vx > 0.0f ? 1 : (vx < 0.0f ? -1 : 0);
-		const int dvy = vy > 0.0f ? 1 : (vy < 0.0f ? -1 : 0);
-		
-		int nx = At<safe>(x+dvx, y);
-		int ny = At<safe>(x, y+dvy);
-		int nxy = At<safe>(x+dvx, y+dvy);
-		
-		const float _diagv = nxy ? minv : 0.0f;
-		float fvx = nx ? avx - _diagv : 0.0f;
-		float fvy = ny ? avy - _diagv : 0.0f;
-		float diagv = _diagv * 1.4142135623730950488; // sqrt(2)
-		
-		float total = diagv + fvx + fvy;
-		if (total > 0.95f) {
-			float div = 1.0f / (total * 1.05f);
-// 			diagv /= total;
-// 			fvx /= total;
-// 			fvy /= total;
-			diagv *= div;
-			fvx *= div;
-			fvy *= div;
-			total = 1.0f;
-			if (nx && ny && nxy) {
-// 				assert(fabs(total - (diagv + fvx + fvy)) < 0.00001);
+	NEIGHBOURS(neighs, x, y);
+	FOR_EACH_DIR_SAFE_COND(neighs[DIR],
+		{
+			const float sum = SumFlux(neighs[DIR]);
+			if (sum > 0.0f) {
+				const float neighSed = sediment[neighs[DIR]];
+				const float incomingFlux = flux[neighs[DIR]].fluxArray[R_DIR];
+				const float dV = dt * neighSed * incomingFlux / sum;
+				deltaSedimentGround[src] += dV;
 			}
-		}
-		
-		if (nx && ny && nxy) {
-// 			assert(fabs(total - (diagv + fvx + fvy)) < 0.00001);
-		} else {
-			total = diagv + fvx + fvy;
-		}
-		
-// 		assert(total <= 1.0f);
-		
-		constexpr float factor = 0.125f;
-		
-		const float sediment = this->sediment[src];
-		const float toDiag = sediment * diagv * factor;
-		const float toX = sediment * fvx * factor;
-		const float toY = sediment * fvy * factor;
-		
-		const float toTransfer = toDiag + toX + toY;
-		
-		deltaSedimentGround[src] -= toTransfer;
-		if (nx) deltaSedimentGround[nx] += toX;
-		if (ny) deltaSedimentGround[ny] += toY;
-		if (nxy) deltaSedimentGround[nxy] += toDiag;
-		
-		assert (toTransfer <= sediment + 0.0000001);
-		
-	} break;
-	case 3: {
-		const float sx = (x - velocity[src].x*dt)/l;
-		const float sy = (y - velocity[src].y*dt)/l;
-		
-		const int SX = floor(sx);
-		const int SY = floor(sy);
-		
-		int a00 = At<safe>(SX, SY);
-		int a10 = At<safe>(SX+1, SY);
-		int a11 = At<safe>(SX+1, SY+1);
-		int a01 = At<safe>(SX, SY+1);
-		
-		const float rx = sx - SX;
-		const float ry = sy - SY;
-		
-		const float ds00 = a00==0 ? 0.0f : sediment[a00] * (1.0f-rx) * (1.0f-ry);
-		const float ds10 = a10==0 ? 0.0f : sediment[a10] * (rx) * (1.0f-ry);
-		const float ds01 = a01==0 ? 0.0f : sediment[a01] * (1.0f-rx) * (ry);
-		const float ds11 = a11==0 ? 0.0f : sediment[a11] * (rx) * (ry);
-		
-		const static auto F = +[](float v)->bool{ return v >= 0.0f && v <= 1.0f; };
-		assert(F(rx));
-		assert(F(1.0f-rx));
-		assert(F(ry));
-		assert(F(1.0f-ry));
-		
-		if (a00) sediment[a00] -= ds00;
-		if (a10) sediment[a10] -= ds10;
-		if (a01) sediment[a01] -= ds01;
-		if (a11) sediment[a11] -= ds11;
-		
-		deltaSedimentGround[src] = (ds00 + ds10 + ds01 + ds11);
-	} break;
-	case 4: {
-		const float sx = (x - velocity[src].x*dt)/l;
-		const float sy = (y - velocity[src].y*dt)/l;
-		const float vel = sqrt(velocity[src].x*velocity[src].x + velocity[src].y*velocity[src].y);
-		const float capFactor = (vel - 1.0f) * 0.001f * dt;
-		if (capFactor < 0.0f) {
-			break;
-		}
-		const float capacity = capFactor > 0.1f ? 0.1f : capFactor;
-		
-		const int SX = floor(sx);
-		const int SY = floor(sy);
-		
-		int a00 = At<safe>(SX, SY);
-		int a10 = At<safe>(SX+1, SY);
-		int a11 = At<safe>(SX+1, SY+1);
-		int a01 = At<safe>(SX, SY+1);
-		
-		const float rx = sx - SX;
-		const float ry = sy - SY;
-		
-		const float ds00 = a00 == 0 ? 0.0f : capacity * (1.0f-rx) * (1.0f-ry);
-		const float ds10 = a10 == 0 ? 0.0f : capacity * (rx) * (1.0f-ry);
-		const float ds01 = a01 == 0 ? 0.0f : capacity * (1.0f-rx) * (ry);
-		const float ds11 = a11 == 0 ? 0.0f : capacity * (rx) * (ry);
-		
-		if (a00) { ground[a00].AddGeneral(-ds00); ground[src][1] += ds00; }
-		if (a10) { ground[a10].AddGeneral(-ds10); ground[src][1] += ds10; }
-		if (a01) { ground[a01].AddGeneral(-ds01); ground[src][1] += ds01; }
-		if (a11) { ground[a11].AddGeneral(-ds11); ground[src][1] += ds11; }
-	} break;
-	case 5: {
-		NEIGHBOURS(neighs, x, y);
-		FOR_EACH_DIR_SAFE_COND(neighs[DIR],
-			{
-				const float sum = SumFlux(neighs[DIR]);
-				if (sum > 0.0f) {
-					const float neighSed = sediment[neighs[DIR]];
-					const float incomingFlux = flux[neighs[DIR]].fluxArray[R_DIR];
-					const float dV = dt * neighSed * incomingFlux / sum;
-					deltaSedimentGround[src] += dV;
-				}
-			});
-	} break;
-	}
+		});
+	*/
 }
 
 template<bool safe>
 inline void Grid::SedimentTransportationUpdate(int x, int y) {
+	HydroPure::SedimentTransportationUpdate(x, y);
+	/*
 	int src = At<false>(x, y);
-	
-	
-	for (int i=0; i<4; ++i) {
-		float f = flux[src].fluxArray[i];
-		if (f < 1000000 && f > -1000000) {
-		} else {
-			printf("FLUX(%i,%.16f)", i, f);
-		}
-	}
-	
 	float f = SumFlux(src);
 	if (f > 0.0f) {
 		sediment[src] *= 1.0f - dt;
 	}
 	sediment[src] += deltaSedimentGround[src];
-	
-	/*
-	float f = SumFlux(src);
-	if (f > 0.0f) {
-		src.s = src.deltaSedimentGround;
-	} else {
-		src.sediment += src.deltaSedimentGround;
-	}
-	*/
 	deltaSedimentGround[src] = 0;
-	
-	
-// 	if (src.sediment < 0.0f) {
-// 		printf("SDUP2(%.16f)\n", src.sediment);
-// 	}
+	*/
 }
 
 template<bool safe>
 inline void Grid::ThermalErosionCalculation(int x, int y) {
+	HydroPure::ThermalErosionCalculation(x, y);
+	/*
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	NEIGHBOURS_CORNERS(neighCorners, x, y);
@@ -468,12 +264,16 @@ inline void Grid::ThermalErosionCalculation(int x, int y) {
 			});
 	}
 	deltaSedimentGround[src] = delta * (1.0f/8.0f) * 0.5f * dt;
+	*/
 }
 
 template<bool safe>
 inline void Grid::ThermalErosionUpdate(int x, int y) {
+	HydroPure::ThermalErosionUpdate(x, y);
+	/*
 	int src = At<false>(x, y);
 	ground[src].AddGeneral(deltaSedimentGround[src]);
+	*/
 }
 
 inline float Grid::EvaporationRate(int x, int y) {
@@ -482,31 +282,43 @@ inline float Grid::EvaporationRate(int x, int y) {
 
 template<bool safe>
 inline void Grid::Evaporation(int x, int y) {
+	HydroPure::Evaporation(x, y);
+	/*
 	int src = At<false>(x, y);
 	water[src] *= (1 - EvaporationRate(x, y)*dt);
+	*/
 }
 
 template<bool safe>
 inline void Grid::Smooth(int x, int y) {
+	HydroPure::Smooth(x, y);
+	/*
 	int src = At<false>(x, y);
 	NEIGHBOURS(neighs, x, y);
 	constexpr float mult = 128;
 	float sum = ground[src].Total() * (mult - 4);
 	FOR_EACH_DIR(sum += neighs[DIR] ? ground[neighs[DIR]].Total() : ground[src].Total());
 	deltaSedimentGround[src] = sum / mult;
+	*/
 }
 
 template<bool safe>
 inline void Grid::SmoothUpdate(int x, int y) {
+	HydroPure::SmoothUpdate(x, y);
+	/*
 	int src = At<false>(x, y);
 	float dh = deltaSedimentGround[src] - ground[src].Total();
 	ground[src][0] += dh;
+	*/
 }
 
 template<bool safe>
 inline void Grid::ClearDelta(int x, int y) {
+	HydroPure::ClearDelta(x, y);
+	/*
 	int src = At<false>(x, y);
 	deltaSedimentGround[src] = 0;
+	*/
 }
 
 constexpr int XDXDX = 4;
@@ -515,9 +327,10 @@ static std::vector<std::thread> threads;
 static std::atomic<int> jobId, jobsDone, jobsTotal;
 static std::function<void(int X)> jobWorker;
 
-template<int BORDER, bool PARALLEL, typename T1, typename T2>
+template<int _BORDER, bool PARALLEL, typename T1, typename T2>
 inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 {
+	constexpr int BORDER = 1; // _BORDER;
 	static std::function<void()> singleIteration =
 		[]()
 	{
@@ -599,6 +412,27 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 	ForEachSafeBorders<BORDER, PARALLEL>([this](int x, int y){this->FUNC<true>(x, y);}, [this](int x, int y){this->FUNC<false>(x, y);});
 
 void Grid::FullCycle() {
+	HydroPure::water = water;
+	HydroPure::ground = ground;
+	HydroPure::sediment = sediment;
+	HydroPure::deltaSedimentGround = deltaSedimentGround; 
+	HydroPure::velocity = velocity;
+	HydroPure::flux = flux;
+
+	HydroPure::hardness[0] = hardness[0];
+	HydroPure::hardness[1] = hardness[1];
+	HydroPure::tangentOfAngleOfRecluse[0] = tangentOfAngleOfRecluse[0];
+	HydroPure::tangentOfAngleOfRecluse[1] = tangentOfAngleOfRecluse[1];
+	HydroPure::width = width;
+	HydroPure::height = height;
+	HydroPure::dt = dt;
+	HydroPure::A = A;
+	HydroPure::g = g;
+	HydroPure::l = l;
+	HydroPure::Kd = Kd;
+	HydroPure::Kc = Kc;
+	HydroPure::minimumSedimentCapacity = minimumSedimentCapacity;
+	
 	++iter;
 	constexpr bool parallel = false;
 	if (useWater) {

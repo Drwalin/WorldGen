@@ -12,6 +12,26 @@
  *    sand with water: 15* - 30*    // maybe can be used for sediment
  */
 
+
+#if not defined EROSION_STRUCTS_DEFINED
+#define EROSION_STRUCTS_DEFINED
+struct Flux {
+	float f[4]; // = {0,0,0,0};
+};
+
+struct Velocity {
+	float x; // = 0;
+	float y; // = 0;
+};
+
+struct GroundLayers {
+	float layers[2];
+};
+#endif
+
+
+
+/*
 struct Flux {
 	float L;
 	float B;
@@ -46,28 +66,30 @@ struct GroundLayers {
 		}
 	}
 };
+*/
 
 struct Grid {
 	bool useWater = true;
 	bool useThermalErosion = true;
 	bool useSmoothing = false;
 	
+	constexpr static int OFF = 15;
+	
 	int iter = 0;
 	void Init(int width, int height) {
 		this->width = width;
 		this->height = height;
-		ground = new GroundLayers[width*height + 17] + 16;
-		water = new float[width*height + 17] + 16;
-		sediment = new float[width*height + 17] + 16;
-		deltaSedimentGround = new float[width*height + 17] + 16;
+		ground = new GroundLayers[width*height + OFF + 1] + OFF;
+		water = new float[width*height + OFF + 1] + OFF;
+		sediment = new float[width*height + OFF + 1] + OFF;
+		deltaSedimentGround = new float[width*height + OFF + 1] + OFF;
 		for (int i=1; i<=width*height; ++i) {
 			water[i] = 0.0f;
 			sediment[i] = 0.0f;
 			deltaSedimentGround[i] = 0.0f;
 		}
-		velocity = new Velocity[width*height + 17] + 16;
-		flux = new FluxUnion[width*height + 17] + 16;
-		
+		velocity = new Velocity[width*height + OFF + 1] + OFF;
+		flux = new Flux[width*height + OFF + 1] + OFF;
 	}
 	Grid() {
 		width = height = 0;
@@ -81,12 +103,12 @@ struct Grid {
 		minimumSedimentCapacity = 0.1;
 	}
 	~Grid() {
-		if (ground) { delete[] (ground - 16); }
-		if (water) { delete[] (water - 16); }
-		if (sediment) { delete[] (sediment - 16); }
-		if (deltaSedimentGround) { delete[] (deltaSedimentGround - 16); }
-		if (velocity) { delete[] (velocity - 16); }
-		if (flux) { delete[] (flux - 16); }
+		if (ground) { delete[] (ground - OFF); }
+		if (water) { delete[] (water - OFF); }
+		if (sediment) { delete[] (sediment - OFF); }
+		if (deltaSedimentGround) { delete[] (deltaSedimentGround - OFF); }
+		if (velocity) { delete[] (velocity - OFF); }
+		if (flux) { delete[] (flux - OFF); }
 	}
 	
 	union {
@@ -109,7 +131,7 @@ struct Grid {
 	};
 	float *deltaSedimentGround = nullptr;
 	Velocity *velocity = nullptr;
-	FluxUnion *flux = nullptr;
+	Flux *flux = nullptr;
 	
 	
 	// tan(30) ~= 0.577
