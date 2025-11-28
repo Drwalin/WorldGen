@@ -467,7 +467,7 @@ inline void Grid::ThermalErosionCalculation(int x, int y) {
 				func();
 			});
 	}
-	deltaSedimentGround[src] = delta * (1.0f/8.0f) * 0.5f; // * dt;
+	deltaSedimentGround[src] = delta * (1.0f/8.0f) * 0.5f * dt;
 }
 
 template<bool safe>
@@ -477,7 +477,7 @@ inline void Grid::ThermalErosionUpdate(int x, int y) {
 }
 
 inline float Grid::EvaporationRate(int x, int y) {
-	return 0.01; // Make it dependent on temperature in place (x,y)
+	return 0.04; // Make it dependent on temperature in place (x,y)
 }
 
 template<bool safe>
@@ -600,7 +600,7 @@ inline void Grid::ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe)
 
 void Grid::FullCycle() {
 	++iter;
-	constexpr bool parallel = true;
+	constexpr bool parallel = false;
 	if (useWater) {
 		FOR_EACH_SAFE_BORDERS(1, parallel, CalcOutflux);
 		FOR_EACH_SAFE_BORDERS(1, parallel, UpdateWaterLevelAndVelocity);

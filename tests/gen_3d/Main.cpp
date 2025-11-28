@@ -22,6 +22,7 @@
 
 int width = 512 + 64;
 int height = width;
+int riverSourcesCount = 4;
 
 float uniScale = 0.01;
 
@@ -69,6 +70,7 @@ int main(int argc, char **argv)
 		width = 16384;
 	}
 	height = width;
+	riverSourcesCount = argc > 3 ? std::min(std::max(atoi(argv[3]), 0), 1000) : 4;
 	const int maxMeshSize = argc > 1 ? atoi(argv[1]) : 512;
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
@@ -414,16 +416,38 @@ void HydroErosionIteration()
 	auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 	grid.Init(width, height);
 	wg::SimplexNoise simplex(432127);
+	
+	std::vector<glm::vec3> riverSources;
+	for (int i=0; i<riverSourcesCount; ++i) {
+		glm::vec3 p;
+		p.x = ((mt() % width) - 128) + 64;
+		p.y = ((mt() % height) - 128) + 64;
+		p.z = (mt() % 1000) / 100.0f + 10.0f;
+		riverSources.push_back(p);
+	}
 
 	{
+		int maxHeight = 0;
 		wg::SimplexNoise simplex(13222);
 		for (int _y = 0; _y < height; ++_y) {
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
 				int t = grid.At<false>(_x, _y);
-				grid.ground[t][0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - 0.5f;
-				grid.ground[t][1] = 0.5f;
+				grid.ground[t][0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - 0.1f;
+				grid.ground[t][1] = 0.1f;
+				if (_x > 64 && _x < width - 64 && _y > 64 && _y < height - 64) {
+					if (vertHeights[i].h > vertHeights[maxHeight].h) {
+						maxHeight = i;
+						if (riverSources.size() > 0) {
+							riverSources[0] = {_x, _y, 200};
+						}
+					}
+				}
 			}
+		}
+		if (riverSources.size() > 0) {
+			riverSources[0].x += (mt() % 11) - 5;
+			riverSources[0].y += (mt() % 11) - 5;
 		}
 	}
 
@@ -436,7 +460,28 @@ void HydroErosionIteration()
 		
 		const auto a = std::chrono::steady_clock::now();
 		
+		if (HYDRO_ITER % 1000 == 0) {
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+					const float x = _x;
+					const float y = _y;
+
+					const float noise =
+						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 1000.0f));
+
+					int p = grid.At<false>(_x, _y);
+
+					grid.ground[p][0] += noise * 3.0f;
+				}
+			}
+		}
+		
 		if (grid.useWater) {
+			for (auto p : riverSources) {
+				int i = grid.At<true>(p.x, p.y);
+				grid.water[i] += p.z * grid.dt;
+			}
+			
 			for (int i=0; i<width * pow(width, 0.2); ++i) {
 				int id = (mt()%(width*height)) + 1;
 				grid.water[id] += 0.01f;

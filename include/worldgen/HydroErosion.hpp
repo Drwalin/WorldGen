@@ -103,7 +103,7 @@ struct Grid {
 		float *s;
 	};
 	union {
-		float hardness[2] = {0.2, 0.1};
+		float hardness[2] = {0.03, 0.07};
 		float Ks[2];
 		float dissolvingConstant[2];
 	};
