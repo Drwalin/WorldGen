@@ -32,6 +32,7 @@ struct Grid {
 	bool useWater = true;
 	bool useThermalErosion = true;
 	bool useSmoothing = false;
+	bool parallel = false;
 	
 	constexpr static int OFF = 15;
 	
@@ -139,51 +140,30 @@ struct Grid {
 	template<bool safe>
 	inline int Neighbour(int x, int y, int dir) const;
 	
-	template<bool safe, int dir>
-	inline float CalcFluxInDirection(int src, int neigh) const;
-	inline void LimitFlux(int src);
-	template<bool safe>
-	void CalcOutflux(int x, int y); // 3.2.1
+	void CalcOutflux(); // 3.2.1
 	
-	template<bool safe>
-	void UpdateWaterLevel(int src, int* neighs);
-	template<bool safe>
-	void UpdateWaterLevelAndVelocity(int x, int y); // 3.2.2
+	void UpdateWaterLevelAndVelocity(); // 3.2.2
 	
-	template<bool safe>
-	inline float SinusLocalTiltAngle(int t, int x, int y);
-	template<bool safe>
-	inline void ErosionAndDepositionCalculation(int x, int y); // 3.3
-	template<bool safe>
-	inline void ErosionAndDepositionUpdate(int x, int y); // 3.3
+	void ErosionAndDepositionCalculation(); // 3.3
+	void ErosionAndDepositionUpdate(); // 3.3
 	
-	template<bool safe>
-	inline void SedimentTransportation(int x, int y); // 3.4
-	template<bool safe>
-	inline void SedimentTransportationUpdate(int x, int y); // 3.4
+	void SedimentTransportation(); // 3.4
+	void SedimentTransportationUpdate(); // 3.4
 	
-	inline float EvaporationRate(int x, int y);
-	template<bool safe>
-	inline void Evaporation(int x, int y); // 3.4
-	template<bool safe>
-	inline void Smooth(int x, int y); // 3.4
-	template<bool safe>
-	inline void SmoothUpdate(int x, int y); // 3.4
-	template<bool safe>
-	inline void ClearDelta(int x, int y);
+	void Evaporation(); // 3.4
+	void Smooth(); // 3.4
+	void SmoothUpdate(); // 3.4
+	void ClearDelta();
 	
 	
-	template<bool safe>
-	inline void ThermalErosionCalculation(int x, int y);
-	template<bool safe>
-	inline void ThermalErosionUpdate(int x, int y);
+	void ThermalErosionCalculation();
+	void ThermalErosionUpdate();
 
-	template<int BORDER, bool PARALLEL, typename T1, typename T2>
-	inline void ForEachSafeBorders(T1 &&funcSafe, T2 &&funcUnsafe);
+	template<typename TFunc>
+	void ForEachSafeBorders(bool PARALLEL, TFunc &&funcSafe);
 	
 	
-	inline float SumFlux(int t);
-	
+	float SumFlux(int t);
 	// to be executed after water increase
 	void FullCycle();
 };

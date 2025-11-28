@@ -10,10 +10,6 @@
 template<bool safe>
 inline int Grid::At(int x, int y) const {
 	if constexpr(safe) {
-// 		if(x < 0)            return At<true>(width-1, y);//nullptr;
-// 		else if(x >= width)  return At<true>(0, y);//nullptr;
-// 		if(y < 0)            return At<true>(x, height-1);//nullptr;
-// 		else if(y >= height) return At<true>(x, 0);//nullptr;
 		if(x < 0)            return 0;
 		else if(x >= width)  return 0;
 		if(y < 0)            return 0;
