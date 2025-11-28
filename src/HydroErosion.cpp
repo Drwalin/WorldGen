@@ -10,18 +10,39 @@
 #include "../include/worldgen/HydroErosion.hpp"
 #include "HydroErosionPure.hpp"
 
+void Grid::CallHydroErosion()
+{
+	ForEachSafeBorders(HydroPure::CalcOutflux);
+	ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
+	ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
+	ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
+	ForEachSafeBorders(HydroPure::SedimentTransportation);
+	ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
+}
+
+void Grid::CallThermalErosion()
+{
+	ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
+	ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
+}
+void Grid::CallEvaporation() { ForEachSafeBorders(HydroPure::Evaporation); }
+void Grid::CallSmoothing()
+{
+	// TODO: replace with selectional smoothing, to smooth only where slope
+	// changes very rapidly
+	ForEachSafeBorders(HydroPure::Smooth);
+	ForEachSafeBorders(HydroPure::SmoothUpdate);
+}
+
 constexpr int XDXDX = 4;
 
 static std::vector<std::thread> threads;
 static std::atomic<int> jobId, jobsDone, jobsTotal;
 static std::function<void(int X)> jobWorker;
 
-template<typename TFunc>
-inline void Grid::ForEachSafeBorders(TFunc &&func)
+template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 {
-	static std::function<void()> singleIteration =
-		[]()
-	{
+	static std::function<void()> singleIteration = []() {
 		int X = jobId.fetch_add(1);
 		if (X < jobsTotal.load()) {
 			jobWorker(X);
@@ -32,27 +53,27 @@ inline void Grid::ForEachSafeBorders(TFunc &&func)
 		int threadsCount =
 			std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
 		while (threads.size() < threadsCount) {
-			threads.push_back(std::thread(
-						[](){
-						while(true) {
-							if (jobId.load() < jobsTotal.load()) {
-								singleIteration();
-							} else {
-								std::this_thread::sleep_for(std::chrono::milliseconds(1));
-							}
-						}
-						}));
+			threads.push_back(std::thread([]() {
+				while (true) {
+					if (jobId.load() < jobsTotal.load()) {
+						singleIteration();
+					} else {
+						std::this_thread::sleep_for(
+							std::chrono::milliseconds(1));
+					}
+				}
+			}));
 		}
 	}
 	const bool parallel = this->parallel && !threads.empty();
-	
+
 	if (parallel) {
-		jobWorker = [&](int X){
+		jobWorker = [&](int X) {
 			X = X * XDXDX;
-			int xend = std::min(X+XDXDX, width);
+			int xend = std::min(X + XDXDX, width);
 			int yend = height;
-			for(int y=0; y<yend; ++y) {
-				for (int x=X; x<xend; ++x) {
+			for (int y = 0; y < yend; ++y) {
+				for (int x = X; x < xend; ++x) {
 					func(x, y);
 				}
 			}
@@ -61,17 +82,17 @@ inline void Grid::ForEachSafeBorders(TFunc &&func)
 		jobId = 0;
 		jobsTotal = (width + XDXDX - 1) / XDXDX;
 	}
-	
+
 	if (!parallel) {
-		for(int X=0; X<width; X+=XDXDX) {
-			for(int y=0; y<height; ++y) {
-				for (int x=X; x<X+XDXDX && x<width; ++x) {
+		for (int X = 0; X < width; X += XDXDX) {
+			for (int y = 0; y < height; ++y) {
+				for (int x = X; x < X + XDXDX && x < width; ++x) {
 					func(x, y);
 				}
 			}
 		}
 	}
-	
+
 	if (parallel) {
 		while (jobsDone.load() < jobsTotal.load()) {
 			singleIteration();
@@ -83,11 +104,12 @@ inline void Grid::ForEachSafeBorders(TFunc &&func)
 	jobId = 0;
 }
 
-void Grid::FullCycle() {
+void Grid::FullCycle()
+{
 	HydroPure::water = water;
 	HydroPure::ground = ground;
 	HydroPure::sediment = sediment;
-	HydroPure::deltaSedimentGround = deltaSedimentGround; 
+	HydroPure::deltaSedimentGround = deltaSedimentGround;
 	HydroPure::velocity = velocity;
 	HydroPure::flux = flux;
 
@@ -104,29 +126,21 @@ void Grid::FullCycle() {
 	HydroPure::Kd = Kd;
 	HydroPure::Kc = Kc;
 	HydroPure::minimumSedimentCapacity = minimumSedimentCapacity;
-	
+
 	++iter;
 	if (useWater) {
-		ForEachSafeBorders(HydroPure::CalcOutflux);
-		ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
-		ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
-		ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
-		ForEachSafeBorders(HydroPure::ClearDelta);
-		ForEachSafeBorders(HydroPure::SedimentTransportation);
-		ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
+		CallHydroErosion();
 	}
 	if (useThermalErosion) {
-		ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
-		ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
+		CallThermalErosion();
 	}
 	if (useWater) {
-		ForEachSafeBorders(HydroPure::Evaporation);
+		CallEvaporation();
 	}
 	if (useSmoothing && iter % 47 == 0) {
 		// TODO: replace with selectional smoothing, to smooth only where slope
 		// changes very rapidly
-		ForEachSafeBorders(HydroPure::Smooth);
-		ForEachSafeBorders(HydroPure::SmoothUpdate);
+		CallSmoothing();
 	}
 }
 

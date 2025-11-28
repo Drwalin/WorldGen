@@ -133,44 +133,28 @@ struct Grid {
 	};
 	float minimumSedimentCapacity;
 	
-	template<bool safe>
-	inline int At(int x, int y) const;
-	template<bool safe, int dir>
-	inline int Neighbour(int x, int y) const;
-	template<bool safe>
-	inline int Neighbour(int x, int y, int dir) const;
+	inline int At(int x, int y) const {
+		if(x < 0)            return 0;
+		else if(x >= width)  return 0;
+		if(y < 0)            return 0;
+		else if(y >= height) return 0;
+		return (x*height + y) + 1;
+	}
 	
-	void CalcOutflux(); // 3.2.1
-	
-	void UpdateWaterLevelAndVelocity(); // 3.2.2
-	
-	void ErosionAndDepositionCalculation(); // 3.3
-	void ErosionAndDepositionUpdate(); // 3.3
-	
-	void SedimentTransportation(); // 3.4
-	void SedimentTransportationUpdate(); // 3.4
-	
-	void Evaporation(); // 3.4
-	void Smooth(); // 3.4
-	void SmoothUpdate(); // 3.4
-	void ClearDelta();
-	
-	
-	void ThermalErosionCalculation();
-	void ThermalErosionUpdate();
+	void CallHydroErosion();
+	void CallThermalErosion();
+	void CallSmoothing();
+	void CallEvaporation();
 
 	template<typename TFunc>
 	void ForEachSafeBorders(TFunc &&funcSafe);
 	
 	
 	float SumFlux(int t);
+	
 	// to be executed after water increase
 	void FullCycle();
 };
-
-#include "HydroErosion.incl.hpp"
-#ifdef HYDRO_EROSION_INCL_HPP
-#endif
 
 #endif
 

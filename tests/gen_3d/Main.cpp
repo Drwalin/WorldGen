@@ -460,7 +460,7 @@ void HydroErosionIteration()
 		for (int _y = 0; _y < height; ++_y) {
 			for (int _x = 0; _x < width; ++_x) {
 				const int i = _x + _y * width;
-				int t = grid.At<false>(_x, _y);
+				int t = grid.At(_x, _y);
 				grid.ground[t].layers[0] = vertHeights[i].h * HYDRO_EROSION_Y_SCALE - SOFT_LAYER;
 				grid.ground[t].layers[1] = SOFT_LAYER;
 				if (_x > 64 && _x < width - 64 && _y > 64 && _y < height - 64) {
@@ -497,7 +497,7 @@ void HydroErosionIteration()
 					const float noise =
 						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 1000.0f));
 
-					int p = grid.At<false>(_x, _y);
+					int p = grid.At(_x, _y);
 
 					grid.ground[p].layers[0] += noise * 3.0f;
 				}
@@ -506,7 +506,7 @@ void HydroErosionIteration()
 		
 		if (grid.useWater) {
 			for (auto p : riverSources) {
-				int i = grid.At<true>(p.x, p.y);
+				int i = grid.At(p.x, p.y);
 				grid.water[i] += p.z * grid.dt;
 			}
 			
@@ -534,7 +534,7 @@ void HydroErosionIteration()
 						}
 						*/
 						
-						int p = grid.At<false>(_x, _y);
+						int p = grid.At(_x, _y);
 						
 						grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
 						
@@ -545,11 +545,11 @@ void HydroErosionIteration()
 			}
 			
 			if (true) {
-				grid.water[grid.At<false>(1, 1)] += 0.1;
-				grid.water[grid.At<false>(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+				grid.water[grid.At(1, 1)] += 0.1;
+				grid.water[grid.At(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
 				for (int _y = 13; _y < 18; ++_y) {
 					for (int _x = 498; _x < 503; ++_x) {
-						grid.water[grid.At<false>(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
+						grid.water[grid.At(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
 					}
 				}
 			}
@@ -570,7 +570,7 @@ void HydroErosionIteration()
 					for (int _x = 0; _x < width; ++_x) {
 // 						const int i = _x + _y * width;
 						const int i = _x * height + _y;
-						const int t = grid.At<false>(_x, _y);
+						const int t = grid.At(_x, _y);
 						float h = grid.ground[t].layers[0];// + grid.water[t] + grid.sediment[t];
 	// 					float h = t->sediment;
 						h /= HYDRO_EROSION_Y_SCALE;
@@ -597,7 +597,7 @@ void HydroErosionIteration()
 					for (int _x = 0; _x < width; ++_x) {
 // 						const int i = _x + _y * width;
 						const int i = _x * height + _y;
-						const int t = grid.At<false>(_x, _y);
+						const int t = grid.At(_x, _y);
 						float h = grid.ground[t].layers[0] + grid.ground[t].layers[1];//grid.water[t];// + grid.ground[t].Total() + grid.sediment[t];
 // 						float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[t];
 						h /= HYDRO_EROSION_Y_SCALE;

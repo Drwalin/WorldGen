@@ -33,7 +33,7 @@ int main(int argc, char ** argv) {
 		for(int y=0; y<height; ++y) {
 			float X = x/30.0f;
 			float Y = y/30.0f;
-			grid.ground[grid.At<false>(x, y)].layers[0] = sin(X) * sin(Y)*100;
+			grid.ground[grid.At(x, y)].layers[0] = sin(X) * sin(Y)*100;
 		}
 	}
 	printf("Converted\n");
@@ -46,13 +46,13 @@ int main(int argc, char ** argv) {
 	for(size_t I=0;; ++I) {
 		for(int x=0; x<width; ++x) {
 			for(int y=0; y<height; ++y) {
-				grid.water[grid.At<false>(x, y)] += 0.01;
+				grid.water[grid.At(x, y)] += 0.01;
 			}
 		}
 // 		for(int i=0; i<width*10; ++i) {
-// 			grid.At<false>(rand()%grid.width, rand()%grid.height)->water += 0.01;
+// 			grid.At(rand()%grid.width, rand()%grid.height)->water += 0.01;
 // 		}
-// 		grid.At<false>(1330%width, 1850%height)->water += 0.1;
+// 		grid.At(1330%width, 1850%height)->water += 0.1;
 		grid.FullCycle();
 // 		if(clock() - beg >= CLOCKS_PER_SEC*2) {
 			printf(" done: %li ...", I);
