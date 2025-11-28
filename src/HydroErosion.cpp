@@ -10,6 +10,64 @@
 #include "../include/worldgen/HydroErosion.hpp"
 #include "HydroErosionPure.hpp"
 
+void Grid::Init(int width, int height)
+{
+	this->width = width;
+	this->height = height;
+	ground = new GroundLayers[width * height + OFF + 1] + OFF;
+	water = new float[width * height + OFF + 1] + OFF;
+	sediment = new float[width * height + OFF + 1] + OFF;
+	deltaSedimentGround = new float[width * height + OFF + 1] + OFF;
+	velocity = new Velocity[width * height + OFF + 1] + OFF;
+	flux = new Flux[width * height + OFF + 1] + OFF;
+	for (int i = 1; i <= width * height; ++i) {
+		water[i] = 0.0f;
+		sediment[i] = 0.0f;
+		deltaSedimentGround[i] = 0.0f;
+		flux[i].f[0] = 0;
+		flux[i].f[1] = 0;
+		flux[i].f[2] = 0;
+		flux[i].f[3] = 0;
+		ground[i].layers[0] = 0;
+		ground[i].layers[1] = 0;
+	}
+}
+
+Grid::Grid()
+{
+	width = height = 0;
+	dt = 0.03;
+	crossSectionalAreaOfPipe = .6;
+	gravity = 9.81;
+	tileDimensionSize = 1;
+
+	depositionConstant = 0.03;
+	sedimentCapacityConstant = 0.03;
+	minimumSedimentCapacity = 0.1;
+}
+
+Grid::~Grid()
+{
+	if (ground) {
+		delete[] (ground - OFF);
+	}
+	if (water) {
+		delete[] (water - OFF);
+	}
+	if (sediment) {
+		delete[] (sediment - OFF);
+	}
+	if (deltaSedimentGround) {
+		delete[] (deltaSedimentGround - OFF);
+	}
+	if (velocity) {
+		delete[] (velocity - OFF);
+	}
+	if (flux) {
+		delete[] (flux - OFF);
+	}
+}
+
 void Grid::CallHydroErosion()
 {
 	ForEachSafeBorders(HydroPure::CalcOutflux);
