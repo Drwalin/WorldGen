@@ -160,7 +160,7 @@ struct Grid {
 	void ThermalErosionUpdate();
 
 	template<typename TFunc>
-	void ForEachSafeBorders(bool PARALLEL, TFunc &&funcSafe);
+	void ForEachSafeBorders(TFunc &&funcSafe);
 	
 	
 	float SumFlux(int t);

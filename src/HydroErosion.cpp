@@ -17,7 +17,7 @@ static std::atomic<int> jobId, jobsDone, jobsTotal;
 static std::function<void(int X)> jobWorker;
 
 template<typename TFunc>
-inline void Grid::ForEachSafeBorders(bool PARALLEL, TFunc &&func)
+inline void Grid::ForEachSafeBorders(TFunc &&func)
 {
 	static std::function<void()> singleIteration =
 		[]()
@@ -44,7 +44,7 @@ inline void Grid::ForEachSafeBorders(bool PARALLEL, TFunc &&func)
 						}));
 		}
 	}
-	const bool parallel = PARALLEL && !threads.empty();
+	const bool parallel = this->parallel && !threads.empty();
 	
 	if (parallel) {
 		jobWorker = [&](int X){
@@ -107,26 +107,26 @@ void Grid::FullCycle() {
 	
 	++iter;
 	if (useWater) {
-		ForEachSafeBorders(parallel, HydroPure::CalcOutflux);
-		ForEachSafeBorders(parallel, HydroPure::UpdateWaterLevelAndVelocity);
-		ForEachSafeBorders(parallel, HydroPure::ErosionAndDepositionCalculation);
-		ForEachSafeBorders(parallel, HydroPure::ErosionAndDepositionUpdate);
-		ForEachSafeBorders(parallel, HydroPure::ClearDelta);
-		ForEachSafeBorders(parallel, HydroPure::SedimentTransportation);
-		ForEachSafeBorders(parallel, HydroPure::SedimentTransportationUpdate);
+		ForEachSafeBorders(HydroPure::CalcOutflux);
+		ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
+		ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
+		ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
+		ForEachSafeBorders(HydroPure::ClearDelta);
+		ForEachSafeBorders(HydroPure::SedimentTransportation);
+		ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
 	}
 	if (useThermalErosion) {
-		ForEachSafeBorders(parallel, HydroPure::ThermalErosionCalculation);
-		ForEachSafeBorders(parallel, HydroPure::ThermalErosionUpdate);
+		ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
+		ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
 	}
 	if (useWater) {
-		ForEachSafeBorders(parallel, HydroPure::Evaporation);
+		ForEachSafeBorders(HydroPure::Evaporation);
 	}
 	if (useSmoothing && iter % 47 == 0) {
 		// TODO: replace with selectional smoothing, to smooth only where slope
 		// changes very rapidly
-		ForEachSafeBorders(parallel, HydroPure::Smooth);
-		ForEachSafeBorders(parallel, HydroPure::SmoothUpdate);
+		ForEachSafeBorders(HydroPure::Smooth);
+		ForEachSafeBorders(HydroPure::SmoothUpdate);
 	}
 }
 

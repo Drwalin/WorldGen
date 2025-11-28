@@ -388,7 +388,6 @@ void ThreadFunction()
 					p *= 0.5f;
 					
 					
-					const int i = _x * height + _y;
 					glm::vec3 v;
 
 					p.y += 750.f / SCALE;
@@ -411,6 +410,7 @@ void ThreadFunction()
 					float h = v.x * 600.0f * generatorYScale;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
+					const int i = _x * height + _y;
 					vertColors[i] = {(uint8_t)c.x, (uint8_t)c.y, (uint8_t)c.z, 255};
 					vertHeights[i] = {h, 0};
 				}
