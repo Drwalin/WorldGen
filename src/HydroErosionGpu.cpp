@@ -61,7 +61,7 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 
 	const std::string baseCode =
 		std::string("#version 430 core\n\n") +
-		gl::Shader::LoadFile("../src/HydroErosionPure.h").c_str() + "\n";
+		gl::Shader::LoadFileUseIncludes("../src/HydroErosionPure.h").c_str() + "\n";
 
 	struct Pair {
 		gl::Shader *shader;

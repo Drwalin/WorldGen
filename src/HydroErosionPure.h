@@ -1,87 +1,13 @@
-#if GL_core_profile
-#define inline
-#define IGNORE_UNUSED(VAR)
-#define BUFFER(BLOCK, TYPE, VAR)                                               \
-	buffer BLOCK { TYPE VAR[]; };
-#define static
-#else
-#include <cmath>
-#define layout(a)
-#define uniform
-#define IGNORE_UNUSED(VAR) (void)VAR;
-#define BUFFER(BLOCK, TYPE, VAR) static TYPE *VAR = nullptr;
-inline float min(float A, float B) { return A < B ? A : B; }
-inline float max(float A, float B) { return A > B ? A : B; }
-#endif
 
-#define COND_GRID(COND, EXPR)                                                  \
-	if (COND) {                                                                \
-		EXPR                                                                   \
-	}
-
-#define NEIGHBOURS(VAR_NAME, X, Y)                                             \
-	int VAR_NAME[4] = {Neighbour(X, Y, 0), Neighbour(X, Y, 1),                 \
-					   Neighbour(X, Y, 2), Neighbour(X, Y, 3)}
-
-#define NEIGHBOURS_CORNERS(VAR_NAME, X, Y)                                     \
-	int VAR_NAME[4] = {                                                        \
-		At(X - 1, Y - 1),                                                      \
-		At(X + 1, Y - 1),                                                      \
-		At(X - 1, Y + 1),                                                      \
-		At(X + 1, Y + 1),                                                      \
-	}
-
-#define FOR_EACH_DIR(CODE)                                                     \
-	{                                                                          \
-		for (int DIR = 0; DIR < 4; ++DIR) {                                    \
-			int R_DIR = (DIR + 2) & 3;                                         \
-			IGNORE_UNUSED(R_DIR)                                               \
-			CODE                                                               \
-		}                                                                      \
-	}
-
-#define FOR_EACH_DIR_COND(COND, CODE) FOR_EACH_DIR(COND_GRID(COND, CODE))
-
-#define REV_DIR(DIR) ((DIR + 2) & 3)
-
-#define SWAP(A, B)                                                             \
-	{                                                                          \
-		float tmp = A;                                                         \
-		A = B;                                                                 \
-		B = tmp;                                                               \
-	}
+%:include "../include/worldgen/GlslSharedWithCpp_Header.h"
+%:include "../include/worldgen/HydroErosionMacros.h"
+%:include "../include/worldgen/HydroErosionStructs.h"
 
 #if GL_core_profile
-struct Flux {
-	float f[4];
-};
-
-struct Velocity {
-	float x;
-	float y;
-};
-
-struct GroundLayers {
-	float layers[2];
-};
 #else
-#if not defined EROSION_STRUCTS_DEFINED
-#define EROSION_STRUCTS_DEFINED
-struct Flux {
-	float f[4];
-};
-
-struct Velocity {
-	float x;
-	float y;
-};
-
-struct GroundLayers {
-	float layers[2];
-};
-#endif
 namespace HydroPure
 {
+using namespace glm;
 #endif
 
 layout(binding = 1) BUFFER(BufferBlock1, GroundLayers, ground);
@@ -130,13 +56,13 @@ inline void AddGeneralGround(int t, float dv)
 inline int At(int x, int y)
 {
 	if (x < 0)
-		return 0; // At(x+width, y); // 0;
+		return 0;
 	else if (x >= width)
-		return 0; // At(x-width, y); // 0;
+		return 0;
 	if (y < 0)
-		return 0; // At(x, y+height); // 0;
+		return 0;
 	else if (y >= height)
-		return 0; // At(x, y-height); // 0;
+		return 0;
 	return (x * height + y) + 1;
 }
 
@@ -153,7 +79,6 @@ inline int Neighbour(int x, int y, int dir)
 		return At(x, y - 1);
 	}
 	return 0;
-	// TODO: should not happen
 }
 
 inline float SumFluxF(Flux f) { return f.f[0] + f.f[1] + f.f[2] + f.f[3]; }
@@ -249,16 +174,14 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 	if (neighs[0] == 0) {
 		neighs[0] = t;
 		xl = l;
+	} else if (neighs[2] == 0) {
+		neighs[2] = t;
+		xl = l;
 	}
 	if (neighs[1] == 0) {
 		neighs[1] = t;
 		yl = l;
-	}
-	if (neighs[2] == 0) {
-		neighs[2] = t;
-		xl = l;
-	}
-	if (neighs[3] == 0) {
+	} else if (neighs[3] == 0) {
 		neighs[3] = t;
 		yl = l;
 	}
@@ -269,17 +192,19 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 	return sqrt(s) / sqrt(1 + s);
 }
 
-inline void ErosionAndDepositionCalculation(int x, int y)
+inline float CalcSedimentCapacity(int src, int x, int y)
 {
-	int src = At(x, y);
 	Velocity vel = velocity[src];
 	const float sinusLocalTiltAngle = SinusLocalTiltAngle(src, x, y);
 	const float v = sqrt(vel.x * vel.x + vel.y * vel.y);
 	float capacity = Kc * sinusLocalTiltAngle * v;
-	if (capacity < minimumSedimentCapacity)
-		capacity = minimumSedimentCapacity;
-	if (capacity > 1)
-		capacity = 1;
+	return clamp(capacity, minimumSedimentCapacity, float(1.0));
+}
+
+inline void ErosionAndDepositionCalculation(int x, int y)
+{
+	int src = At(x, y);
+	float capacity = CalcSedimentCapacity(src, x, y);
 
 	const float delta = (capacity - sediment[src]) * dt;
 	float res = 0;
@@ -331,12 +256,7 @@ inline void SedimentTransportation(int x, int y)
 inline void SedimentTransportationUpdate(int x, int y)
 {
 	int src = At(x, y);
-	// 	float f = SumFlux(src);
-	// 	float sed = sediment[src];
-	// 	if (f > 0) {
-	// 		sed *= 1 - dt;
-	// 	}
-	sediment[src] = /*sed */ +temp1[src];
+	sediment[src] = temp1[src];
 }
 
 inline void ThermalErosionCalculation(int x, int y)
@@ -451,3 +371,4 @@ inline void ClearDelta(int x, int y)
 #else
 } // namespace HydroPure
 #endif
+

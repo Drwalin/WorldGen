@@ -16,21 +16,7 @@
  *    sand with water: 15* - 30*    // maybe can be used for sediment
  */
 
-#if not defined EROSION_STRUCTS_DEFINED
-#define EROSION_STRUCTS_DEFINED
-struct Flux {
-	float f[4];
-};
-
-struct Velocity {
-	float x;
-	float y;
-};
-
-struct GroundLayers {
-	float layers[2];
-};
-#endif
+#include "HydroErosionStructs.h"
 
 struct Grid {
 	bool useGpu;
