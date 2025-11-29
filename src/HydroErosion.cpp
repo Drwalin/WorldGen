@@ -7,7 +7,7 @@
 #include <functional>
 
 #include "../include/worldgen/HydroErosion.hpp"
-#include "HydroErosionPure.hpp"
+#include "HydroErosionPure.h"
 
 void Grid::CallHydroErosion()
 {
@@ -213,8 +213,9 @@ void Grid::FullCycle()
 	HydroPure::Kd = Kd;
 	HydroPure::Kc = Kc;
 	HydroPure::minimumSedimentCapacity = minimumSedimentCapacity;
+	
+	HydroPure::iteration = iteration;
 
-	++iter;
 	if (useWater) {
 		CallHydroErosion();
 	}
@@ -224,11 +225,13 @@ void Grid::FullCycle()
 	if (useWater) {
 		CallEvaporation();
 	}
-	if (useSmoothing && iter % 47 == 0) {
+	if (useSmoothing && iteration % 47 == 0) {
 		// TODO: replace with selectional smoothing, to smooth only where slope
 		// changes very rapidly
 		CallSmoothing();
 	}
+	
+	++iteration;
 }
 
 void Grid::UpdateHeightsTexture(gl::Texture *tex)

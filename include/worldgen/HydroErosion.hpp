@@ -4,7 +4,6 @@
 #define HYDRO_EROSION_HPP
 
 #include "../../../OpenGLWrapper/include/openglwrapper/VBO.hpp"
-#include "../../../OpenGLWrapper/include/openglwrapper/OpenGL.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Shader.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
 
@@ -42,30 +41,16 @@ struct Grid {
 
 	constexpr static int OFF = 15;
 
-	int iter = 0;
+	int iteration = 0;
 	
 	void Init(int width, int height, bool useGpu);
 	Grid();
 	~Grid();
 
-	union {
-		GroundLayers *b = nullptr;
-		GroundLayers *ground;
-	};
-	union {
-		float *water = nullptr;
-		float *d;
-	};
-	union {
-		float *sediment = nullptr;
-		float *suspendedSediment;
-		float *s;
-	};
-	union {
-		float hardness[2] = {0.03, 0.07};
-		float Ks[2];
-		float dissolvingConstant[2];
-	};
+	GroundLayers *ground = nullptr;
+	float *water = nullptr;
+	float *sediment = nullptr;
+	float hardness[2] = {0.03, 0.07};
 	float *temp1 = nullptr;
 	Velocity *velocity = nullptr;
 	Flux *flux = nullptr;

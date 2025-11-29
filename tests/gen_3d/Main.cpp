@@ -89,8 +89,6 @@ Grid grid;
 
 int main(int argc, char **argv)
 {
-	printf("sizeof(glm::vec3) = %lu\n", sizeof(glm::vec3));
-	
 	width = argc > 2 ? atoi(argv[2]) : 512 + 64;
 	if (width < 512 + 64) {
 		width = 512+64;
@@ -331,14 +329,24 @@ int main(int argc, char **argv)
 			vao.Draw();
 			glDepthMask(true);
 		}
-
-		DefaultIterationEnd();
 		
-		gl::openGL.PrintErrors();
-		
+		if (useGpu || !disableRender) {
+			gl::Flush();
+		}
 		if (useGpu == false || gridInited == false || disableRender) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
+
+		if (disableRender) {
+			gl::openGL.PrintErrors();
+			gl::openGL.ClearErrors();
+		} else {
+			gl::openGL.SwapBuffer();
+			gl::openGL.PrintErrors();
+			gl::openGL.ClearErrors();
+		}
+		
+		gl::openGL.PrintErrors();
 	}
 
 	gl::openGL.Destroy();
@@ -377,6 +385,9 @@ void ThreadFunction()
 
 	std::atomic<int> chunkCounter = 0;
 	std::atomic<int> threadsDone = 0;
+	
+	std::atomic<float> maxHeight = -10000;
+	std::mutex mutex;
 
 	auto threadCalcFunc = [&]() {
 		float maxH = 0;
@@ -425,7 +436,9 @@ void ThreadFunction()
 				}
 			}
 		}
-		printf("Max height: %.3f\n", maxH);
+		mutex.lock();
+		maxHeight = std::max(maxHeight.load(), maxH);
+		mutex.unlock();
 		threadsDone++;
 	};
 
@@ -434,15 +447,18 @@ void ThreadFunction()
 
 	for (int i = 1; i < threadsCount; ++i) {
 		threads.push_back(std::thread(threadCalcFunc));
-		threads.back().detach();
 	}
 
 	threadCalcFunc();
 
+	for (auto &thread : threads) {
+		thread.join();
+	}
 	while (threadsDone.load() < threads.size() + 1) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(60));
+		
 	}
-	printf("\r Done!                         \n");
+	printf("\nMax height: %.3f     Done!\n", maxHeight.load());
 	updateColorsTexture = true;
 
 	if (useGpu == false) {
@@ -459,7 +475,13 @@ void HydroErosionIteration()
 	static std::vector<glm::vec3> riverSources;
 	
 	if (HYDRO_ITER == 0) {
-		grid.Init(width, height, useGpu);
+		{
+			const auto a = std::chrono::steady_clock::now();
+			grid.Init(width, height, useGpu);
+			const auto b = std::chrono::steady_clock::now();
+			float ms = std::chrono::nanoseconds(b - a).count() / 1'000'000.0;
+			printf("\nGrid init took: %10.6f ms       \n", ms);
+		}
 		
 		for (int i=0; i<riverSourcesCount; ++i) {
 			glm::vec3 p;

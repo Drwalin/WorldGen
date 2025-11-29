@@ -113,7 +113,4 @@ void main()
 // 	light = 1.0 - light*0.6;
 
 	FragColor = vec4(FragColor.xyz * light, 1.0 - float(useWater) * 0.3);
-	if (gridWidth > 1600) {
-		FragColor.w = 1.0;
-	}
 }

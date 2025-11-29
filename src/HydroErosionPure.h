@@ -101,6 +101,14 @@ static uniform float l;	 // tileDimensionSize
 static uniform float Kd; // depositionConstant
 static uniform float Kc; // sedimentCapacityConstant
 static uniform float minimumSedimentCapacity;
+static uniform int iteration;
+#if GL_core_profile
+#else
+namespace _____holder
+{
+inline void _holder() { (void)iteration; }
+} // namespace _____holder
+#endif
 
 inline float TotalGround(int t)
 {
@@ -148,17 +156,12 @@ inline int Neighbour(int x, int y, int dir)
 	// TODO: should not happen
 }
 
-inline float SumFluxF(Flux f)
-{
-	return f.f[0] + f.f[1] + f.f[2] + f.f[3];
-}
+inline float SumFluxF(Flux f) { return f.f[0] + f.f[1] + f.f[2] + f.f[3]; }
 
-inline float SumFlux(int t)
-{
-	return SumFluxF(flux[t]);
-}
+inline float SumFlux(int t) { return SumFluxF(flux[t]); }
 
-inline float CalcFluxInDirection(int src, int neigh, int dir, Flux fl, float srcSum)
+inline float CalcFluxInDirection(int src, int neigh, int dir, Flux fl,
+								 float srcSum)
 {
 	if (neigh == 0)
 		return 0;
@@ -196,11 +199,12 @@ inline void CalcOutFlux(int x, int y)
 	int src = At(x, y);
 	Flux f = flux[src];
 	NEIGHBOURS(neighs, x, y);
-	
+
 	float srcSum = TotalGround(src) + sediment[src] + water[src];
 
-	FOR_EACH_DIR_COND(neighs[DIR] != 0, (f.f[DIR] = CalcFluxInDirection(
-											 src, neighs[DIR], DIR, f, srcSum));)
+	FOR_EACH_DIR_COND(
+		neighs[DIR] != 0,
+		(f.f[DIR] = CalcFluxInDirection(src, neighs[DIR], DIR, f, srcSum));)
 	flux[src] = LimitFlux(src, f);
 }
 
@@ -270,8 +274,7 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 	int src = At(x, y);
 	Velocity vel = velocity[src];
 	const float sinusLocalTiltAngle = SinusLocalTiltAngle(src, x, y);
-	const float v = sqrt(vel.x * vel.x +
-						 vel.y * vel.y);
+	const float v = sqrt(vel.x * vel.x + vel.y * vel.y);
 	float capacity = Kc * sinusLocalTiltAngle * v;
 	if (capacity < minimumSedimentCapacity)
 		capacity = minimumSedimentCapacity;
@@ -446,5 +449,5 @@ inline void ClearDelta(int x, int y)
 
 #if GL_core_profile
 #else
-}
+} // namespace HydroPure
 #endif
