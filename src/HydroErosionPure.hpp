@@ -148,60 +148,72 @@ inline int Neighbour(int x, int y, int dir)
 	// TODO: should not happen
 }
 
-inline float SumFlux(int t)
+inline float SumFluxF(Flux f)
 {
-	return flux[t].f[0] + flux[t].f[1] + flux[t].f[2] + flux[t].f[3];
+	return f.f[0] + f.f[1] + f.f[2] + f.f[3];
 }
 
-inline float CalcFluxInDirection(int src, int neigh, int dir)
+inline float SumFlux(int t)
+{
+	return SumFluxF(flux[t]);
+}
+
+inline float CalcFluxInDirection(int src, int neigh, int dir, Flux fl, float srcSum)
 {
 	if (neigh == 0)
 		return 0;
 	int dst = neigh;
-	float dh = (TotalGround(src) - TotalGround(dst)) +
-			   (sediment[src] - sediment[dst]) + (water[src] - water[dst]);
-	float f = flux[src].f[dir] + dt * A * g * dh / l;
+	float dh = srcSum - (TotalGround(dst) + sediment[dst] + water[dst]);
+	float f = fl.f[dir] + dt * A * g * dh / l;
 	if (f < 0)
 		f = 0;
 	return f;
 }
 
-inline void LimitFlux(int src)
+inline Flux LimitFlux(int src, Flux f)
 {
-	const float outflux = SumFlux(src);
+	const float outflux = SumFluxF(f);
 	const float _water = water[src] * l * l;
 	if (outflux <= 0.001) {
-		FOR_EACH_DIR({ flux[src].f[DIR] = 0; })
-		return;
+		f.f[0] = 0;
+		f.f[1] = 0;
+		f.f[2] = 0;
+		f.f[3] = 0;
+		return f;
 	}
 	float K = _water / (outflux * dt);
 	if (K > 1) {
 		K = 1;
 	}
 	if (K >= 0) {
-		FOR_EACH_DIR({ flux[src].f[DIR] *= K; })
+		FOR_EACH_DIR({ f.f[DIR] *= K; })
 	}
+	return f;
 }
 
 inline void CalcOutFlux(int x, int y)
 {
 	int src = At(x, y);
+	Flux f = flux[src];
 	NEIGHBOURS(neighs, x, y);
+	
+	float srcSum = TotalGround(src) + sediment[src] + water[src];
 
-	FOR_EACH_DIR_COND(neighs[DIR] != 0, (flux[src].f[DIR] = CalcFluxInDirection(
-											 src, neighs[DIR], DIR));)
-	LimitFlux(src);
+	FOR_EACH_DIR_COND(neighs[DIR] != 0, (f.f[DIR] = CalcFluxInDirection(
+											 src, neighs[DIR], DIR, f, srcSum));)
+	flux[src] = LimitFlux(src, f);
 }
 
-inline void UpdateWaterLevel(int src, int neighs[4])
+inline float UpdateWaterLevel(int src, int neighs[4], float oldWater)
 {
 	float fs = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0,
 					  fs += flux[neighs[DIR]].f[R_DIR] - flux[src].f[DIR];)
-	water[src] += (dt / (l * l)) * fs;
-	if (water[src] < 0) {
-		water[src] = 0;
+	oldWater += (dt / (l * l)) * fs;
+	if (oldWater < 0) {
+		oldWater = 0;
 	}
+	return oldWater;
 }
 
 inline void UpdateWaterLevelAndVelocity(int x, int y)
@@ -209,8 +221,8 @@ inline void UpdateWaterLevelAndVelocity(int x, int y)
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
 	float water_level = water[src];
-	UpdateWaterLevel(src, neighs);
-	water_level = (water_level + water[src]) * 0.5;
+	float newWater = UpdateWaterLevel(src, neighs, water_level);
+	water_level = (water_level + newWater) * 0.5;
 	if (water_level < 0.001) {
 		velocity[src].x = 0;
 		velocity[src].y = 0;
@@ -223,6 +235,7 @@ inline void UpdateWaterLevelAndVelocity(int x, int y)
 	COND_GRID(neighs[3] != 0, dWy += flux[neighs[3]].f[1] - flux[src].f[3];)
 	velocity[src].x = dWx / (water_level * l);
 	velocity[src].y = dWy / (water_level * l);
+	water[src] = newWater;
 }
 
 inline float SinusLocalTiltAngle(int t, int x, int y)
@@ -255,9 +268,10 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 inline void ErosionAndDepositionCalculation(int x, int y)
 {
 	int src = At(x, y);
+	Velocity vel = velocity[src];
 	const float sinusLocalTiltAngle = SinusLocalTiltAngle(src, x, y);
-	const float v = sqrt(velocity[src].x * velocity[src].x +
-						 velocity[src].y * velocity[src].y);
+	const float v = sqrt(vel.x * vel.x +
+						 vel.y * vel.y);
 	float capacity = Kc * sinusLocalTiltAngle * v;
 	if (capacity < minimumSedimentCapacity)
 		capacity = minimumSedimentCapacity;
@@ -265,20 +279,23 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 		capacity = 1;
 
 	const float delta = (capacity - sediment[src]) * dt;
+	float res = 0;
+	GroundLayers g = ground[src];
 
 	if (capacity > sediment[src]) {
 		// picking up sediment
 		float f = hardness[1] * delta;
-		float l1 = ground[src].layers[1];
-		if (f > ground[src].layers[1]) {
+		float l1 = g.layers[1];
+		if (f > g.layers[1]) {
 			float f2 = (f - l1) * hardness[0] / hardness[1];
-			f = ground[src].layers[1] + f2;
+			f = g.layers[1] + f2;
 		}
-		temp1[src] = f;
+		res = f;
 	} else {
 		// depositing sediment
-		temp1[src] = Kd * delta;
+		res = Kd * delta;
 	}
+	temp1[src] = res;
 }
 
 inline void ErosionAndDepositionUpdate(int x, int y)
@@ -287,7 +304,6 @@ inline void ErosionAndDepositionUpdate(int x, int y)
 	float ds = temp1[src];
 	AddGeneralGround(src, -ds);
 	sediment[src] += ds;
-	temp1[src] = 0;
 }
 
 inline void SedimentTransportation(int x, int y)
@@ -325,7 +341,6 @@ inline void ThermalErosionCalculation(int x, int y)
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
 	NEIGHBOURS_CORNERS(neighCorners, x, y);
-	temp1[src] = 0;
 	GroundLayers g = ground[src];
 	float _h11 = g.layers[1];
 	float _h0 = g.layers[0];
@@ -345,7 +360,7 @@ inline void ThermalErosionCalculation(int x, int y)
 				continue;
 			}
 
-			GroundLayers g = ground[neighs[i]];
+			g = ground[neighs[i]];
 			n0 = g.layers[0];
 			n11 = g.layers[1];
 			n1 = n0 + n11;

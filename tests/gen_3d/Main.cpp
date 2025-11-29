@@ -336,7 +336,7 @@ int main(int argc, char **argv)
 		
 		gl::openGL.PrintErrors();
 		
-		if (useGpu == false || gridInited == false) {
+		if (useGpu == false || gridInited == false || disableRender) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
