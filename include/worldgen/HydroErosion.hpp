@@ -3,6 +3,11 @@
 #ifndef HYDRO_EROSION_HPP
 #define HYDRO_EROSION_HPP
 
+#include "../../../OpenGLWrapper/include/openglwrapper/VBO.hpp"
+#include "../../../OpenGLWrapper/include/openglwrapper/OpenGL.hpp"
+#include "../../../OpenGLWrapper/include/openglwrapper/Shader.hpp"
+#include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
+
 /*
  * Angles of repose:
  *    dry sand: 34*
@@ -29,6 +34,7 @@ struct GroundLayers {
 #endif
 
 struct Grid {
+	bool useGpu;
 	bool useWater = true;
 	bool useThermalErosion = true;
 	bool useSmoothing = false;
@@ -38,7 +44,7 @@ struct Grid {
 
 	int iter = 0;
 	
-	void Init(int width, int height);
+	void Init(int width, int height, bool useGpu);
 	Grid();
 	~Grid();
 
@@ -60,7 +66,7 @@ struct Grid {
 		float Ks[2];
 		float dissolvingConstant[2];
 	};
-	float *deltaSedimentGround = nullptr;
+	float *temp1 = nullptr;
 	Velocity *velocity = nullptr;
 	Flux *flux = nullptr;
 
@@ -119,6 +125,76 @@ struct Grid {
 
 	// to be executed after water increase
 	void FullCycle();
+	void UpdateHeightsTexture(gl::Texture *tex);
+	
+	struct GPUCompute {
+		~GPUCompute();
+		
+		gl::Shader shaderCalcOutFlux;
+		gl::Shader shaderUpdateWaterLevelAndVelocity;
+		gl::Shader shaderErosionAndDepositionCalculation;
+		gl::Shader shaderErosionAndDepositionUpdate;
+		gl::Shader shaderSedimentTransportation;
+		gl::Shader shaderSedimentTransportationUpdate;
+		
+		gl::Shader shaderThermalErosionCalculation;
+		gl::Shader shaderThermalErosionUpdate;
+		
+		gl::Shader shaderEvaporation;
+		
+		gl::Shader shaderSmooth;
+		gl::Shader shaderSmoothUpdate;
+		
+		gl::Shader shaderUpdateRainAndRiver;
+		
+		gl::Shader shaderUpdateHeightTexture;
+		int textureUniformLocation;
+		
+		void CallCalcOutFlux();
+		void CallUpdateWaterLevelAndVelocity();
+		void CallErosionAndDepositionCalculation();
+		void CallErosionAndDepositionUpdate();
+		void CallSedimentTransportation();
+		void CallSedimentTransportationUpdate();
+		void CallThermalErosionCalculation();
+		void CallThermalErosionUpdate();
+		void CallEvaporation();
+		void CallSmooth();
+		void CallSmoothUpdate();
+		
+		void CallShader(gl::Shader *shader);
+		
+		void CallUpdateRainAndRiver();
+		void UpdateHeightsTexture(gl::Texture *tex);
+		
+		
+		gl::VBO *vboGround = nullptr;
+		gl::VBO *vboWater = nullptr;
+		gl::VBO *vboSediment = nullptr;
+		gl::VBO *vboTemp1 = nullptr;
+		gl::VBO *vboVelocity = nullptr;
+		gl::VBO *vboFlux = nullptr;
+		
+		gl::VBO *vboRiverSources = nullptr;
+		
+		int width, height;
+		
+		void UpdateGround(GroundLayers *data);
+		void UpdateWater(float *data);
+		void UpdateSediment(float *data);
+		void UpdateTemp1(float *data);
+		void UpdateVelocity(Velocity *data);
+		void UpdateFlux(Flux *data);
+		void UpdateRiverSources(glm::vec3 *data, int amount);
+		
+		
+		void BindBuffers();
+		void SetUniforms(gl::Shader *shader);
+		
+		void Init(int w, int h, Grid *grid);
+		
+		Grid *grid;
+	} gpu;
 };
 
 #endif

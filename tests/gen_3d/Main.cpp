@@ -20,6 +20,8 @@
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
 
+volatile bool useGpu = true;
+volatile bool gridInited = false;
 int width = 512 + 64;
 int height = width;
 int riverSourcesCount = 4;
@@ -56,8 +58,8 @@ struct VertexColors {
 };
 VertexColors *vertColors = nullptr;
 
-
 void ThreadFunction();
+void HydroErosionIteration();
 
 volatile float hydroErosionDuration = 0;
 volatile bool updateHeights = true;
@@ -83,8 +85,12 @@ int clamp(int v, int min, int max)
 	return v;
 }
 
+Grid grid;
+
 int main(int argc, char **argv)
 {
+	printf("sizeof(glm::vec3) = %lu\n", sizeof(glm::vec3));
+	
 	width = argc > 2 ? atoi(argv[2]) : 512 + 64;
 	if (width < 512 + 64) {
 		width = 512+64;
@@ -246,6 +252,12 @@ int main(int argc, char **argv)
 			if (updateColorsTexture) {
 				updateColorsTexture = false;
 				colorsTexture.Update2((const void*)vertColors, 0, 0, width, height, 0, gl::TextureDataFormat::RGBA, gl::DataType::UNSIGNED_BYTE);
+				
+				gridInited = true;
+			}
+			
+			if (gridInited && useGpu) {
+				HydroErosionIteration();
 			}
 			
 			if (updateWaterHeights || updateHeights) {
@@ -253,7 +265,11 @@ int main(int argc, char **argv)
 				auto dur = (now - lastUpdateHeightsTexture);
 				if (dur > std::chrono::milliseconds(500)) {
 					lastUpdateHeightsTexture = now;
-					heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
+					if (gridInited && useGpu) {
+						grid.gpu.UpdateHeightsTexture(&heightsTexture);
+					} else {
+						heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
+					}
 					if (filterWrapTextureSet == false) {
 						filterWrapTextureSet = true;
 
@@ -305,21 +321,15 @@ int main(int argc, char **argv)
 
 		// Draw VAO
 		if (disableRender == false) {
-			/*
-			if (width > 1600) {
-				glDepthMask(true);
-				shader.SetInt(useWaterLoc, 1);
-				vao.Draw();
-			} else {
-			*/
-				shader.SetInt(useWaterLoc, 0);
-				glDepthMask(true);
-				vao.Draw();
-				shader.SetInt(useWaterLoc, 1);
-				glDepthMask(false);
-				vao.Draw();
-				glDepthMask(true);
-			//}
+			shader.SetTexture(colorTexLoc, &colorsTexture, 0);
+			shader.SetTexture(heightTexLoc, &heightsTexture, 1);
+			shader.SetInt(useWaterLoc, 0);
+			glDepthMask(true);
+			vao.Draw();
+			shader.SetInt(useWaterLoc, 1);
+			glDepthMask(false);
+			vao.Draw();
+			glDepthMask(true);
 		}
 
 		DefaultIterationEnd();
@@ -346,9 +356,6 @@ glm::ivec3 ColorGradient(int x, int y)
 	c = glm::clamp(c, glm::vec3(0), glm::vec3(255));
 	return c;
 }
-
-void HydroErosionIteration();
-Grid grid;
 
 void ThreadFunction()
 {
@@ -436,25 +443,30 @@ void ThreadFunction()
 	printf("\r Done!                         \n");
 	updateColorsTexture = true;
 
-	HydroErosionIteration();
+	if (useGpu == false) {
+		for (;;) {
+			HydroErosionIteration();
+		}
+	}
 }
 
 void HydroErosionIteration()
 {
-	auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
-	grid.Init(width, height);
-	wg::SimplexNoise simplex(432127);
+	static auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+	static wg::SimplexNoise simplex(432127);
+	static std::vector<glm::vec3> riverSources;
 	
-	std::vector<glm::vec3> riverSources;
-	for (int i=0; i<riverSourcesCount; ++i) {
-		glm::vec3 p;
-		p.x = ((mt() % width) - 128) + 64;
-		p.y = ((mt() % height) - 128) + 64;
-		p.z = (mt() % 1000) / 100.0f + 10.0f;
-		riverSources.push_back(p);
-	}
+	if (HYDRO_ITER == 0) {
+		grid.Init(width, height, useGpu);
+		
+		for (int i=0; i<riverSourcesCount; ++i) {
+			glm::vec3 p;
+			p.x = ((mt() % width) - 128) + 64;
+			p.y = ((mt() % height) - 128) + 64;
+			p.z = (mt() % 1000) / 100.0f + 10.0f;
+			riverSources.push_back(p);
+		}
 
-	{
 		int maxHeight = 0;
 		wg::SimplexNoise simplex(13222);
 		for (int _y = 0; _y < height; ++_y) {
@@ -471,164 +483,174 @@ void HydroErosionIteration()
 						}
 					}
 				}
+				grid.water[t] = 10.0;
 			}
 		}
 		if (riverSources.size() > 0) {
 			riverSources[0].x += (mt() % 11) - 5;
 			riverSources[0].y += (mt() % 11) - 5;
 		}
+		
+		HYDRO_ITER = HYDRO_ITER + 1;
+		
+		if (useGpu) {
+			grid.gpu.UpdateGround(grid.ground);
+			grid.gpu.UpdateWater(grid.water);
+			grid.gpu.UpdateSediment(grid.sediment);
+			grid.gpu.UpdateTemp1(grid.temp1);
+			grid.gpu.UpdateVelocity(grid.velocity);
+			grid.gpu.UpdateFlux(grid.flux);
+			grid.gpu.UpdateRiverSources(riverSources.data(), riverSources.size());
+		}
 	}
-
-	for (HYDRO_ITER=0;; HYDRO_ITER = HYDRO_ITER + 1) {
-		if (disableSimulation) {
+	
+	if (disableSimulation) {
+		if (useGpu == false) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(150));
-			HYDRO_ITER = HYDRO_ITER - 1;
-			continue;
+		}
+		return;
+	}
+	
+	const auto a = std::chrono::steady_clock::now();
+	
+	if (HYDRO_ITER % 1000 == 0) {
+		for (int _y = 0; _y < height; ++_y) {
+			for (int _x = 0; _x < width; ++_x) {
+				const float x = _x;
+				const float y = _y;
+
+				const float noise =
+					simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 1000.0f));
+
+				int p = grid.At(_x, _y);
+
+				grid.water[p] += noise * 0.1;
+// 					grid.ground[p].layers[0] += noise * 3.0f;
+			}
+		}
+	}
+	
+	if (grid.useWater) {
+		for (auto p : riverSources) {
+			int i = grid.At(p.x, p.y);
+			grid.water[i] += p.z * grid.dt;
 		}
 		
-		const auto a = std::chrono::steady_clock::now();
-		
-		if (HYDRO_ITER % 1000 == 0) {
+		for (int i=0; i<width * pow(width, 0.2); ++i) {
+			int id = (mt()%(width*height));
+			grid.water[id] += 0.01f;
+		}
+
+		if (HYDRO_ITER % 500 == 0) {
+			long double SUM = 0;
 			for (int _y = 0; _y < height; ++_y) {
 				for (int _x = 0; _x < width; ++_x) {
+					/*
 					const float x = _x;
 					const float y = _y;
 
-					const float noise =
-						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 1000.0f));
-
+					const float _rain =
+						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
+						*2.0f - 0.5f;
+					
+					const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
+					
+					if (rain < 0) {
+						printf("rain = %f\n", rain);
+					}
+					*/
+					
 					int p = grid.At(_x, _y);
-
-					grid.ground[p].layers[0] += noise * 3.0f;
+					
+					grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
+					
+					SUM += grid.ground[p].layers[0] + grid.sediment[p];
 				}
 			}
+			SUM_MATERIAL = SUM;
 		}
 		
-		if (grid.useWater) {
-			for (auto p : riverSources) {
-				int i = grid.At(p.x, p.y);
-				grid.water[i] += p.z * grid.dt;
-			}
-			
-			for (int i=0; i<width * pow(width, 0.2); ++i) {
-				int id = (mt()%(width*height));
-				grid.water[id] += 0.01f;
-			}
-
-			if (HYDRO_ITER % 500 == 0) {
-				long double SUM = 0;
-				for (int _y = 0; _y < height; ++_y) {
-					for (int _x = 0; _x < width; ++_x) {
-						/*
-						const float x = _x;
-						const float y = _y;
-
-						const float _rain =
-							simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
-							*2.0f - 0.5f;
-						
-						const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
-						
-						if (rain < 0) {
-							printf("rain = %f\n", rain);
-						}
-						*/
-						
-						int p = grid.At(_x, _y);
-						
-						grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
-						
-						SUM += grid.ground[p].layers[0] + grid.sediment[p];
-					}
-				}
-				SUM_MATERIAL = SUM;
-			}
-			
-			if (true) {
-				grid.water[grid.At(1, 1)] += 0.1;
-				grid.water[grid.At(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
-				for (int _y = 13; _y < 18; ++_y) {
-					for (int _x = 498; _x < 503; ++_x) {
-						grid.water[grid.At(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
-					}
+		if (true) {
+			grid.water[grid.At(1, 1)] += 0.1;
+			grid.water[grid.At(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
+			for (int _y = 13; _y < 18; ++_y) {
+				for (int _x = 498; _x < 503; ++_x) {
+					grid.water[grid.At(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
 				}
 			}
-		}
-// 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-		
-		grid.FullCycle();
-		
-// 		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-
-		if (updateHeights) {
-			const auto now = std::chrono::steady_clock::now();
-			auto dur = (now - lastUpdateHeightsTexture);
-			if (dur > std::chrono::milliseconds(240)) {
-				lastUpdateHeightsTexture = now;
-				updateHeights = false;
-				for (int _y = 0; _y < height; ++_y) {
-					for (int _x = 0; _x < width; ++_x) {
-// 						const int i = _x + _y * width;
-						const int i = _x * height + _y;
-						const int t = grid.At(_x, _y);
-						float h = grid.ground[t].layers[0];// + grid.water[t] + grid.sediment[t];
-	// 					float h = t->sediment;
-						h /= HYDRO_EROSION_Y_SCALE;
-						
-						if (h > -10000 && h < 50000) {
-						} else {
-							h = 0;
-						}
-						
-						vertHeights[i].h = h;
-						vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
-					}
-				}
-			}
-		}
-
-		if (updateWaterHeights) {
-			const auto now = std::chrono::steady_clock::now();
-			auto dur = (now - lastUpdateHeightsTexture);
-			if (dur > std::chrono::milliseconds(240)) {
-				lastUpdateHeightsTexture = now;
-// 				updateWaterHeights = false;
-				for (int _y = 0; _y < height; ++_y) {
-					for (int _x = 0; _x < width; ++_x) {
-// 						const int i = _x + _y * width;
-						const int i = _x * height + _y;
-						const int t = grid.At(_x, _y);
-						float h = grid.ground[t].layers[0] + grid.ground[t].layers[1];//grid.water[t];// + grid.ground[t].Total() + grid.sediment[t];
-// 						float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[t];
-						h /= HYDRO_EROSION_Y_SCALE;
-						
-						if (h > -10000 && h < 50000) {
-						} else {
-							h = 0;
-						}
-						
-						vertHeights[i].h = h;
-						vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
-					}
-				}
-			}
-		}
-		
-// 		std::this_thread::sleep_for(std::chrono::milliseconds(150));
-
-		const auto b = std::chrono::steady_clock::now();
-		hydroErosionDuration =
-			std::chrono::nanoseconds(b - a).count() / 1'000'000.0f;
-		if (HYDRO_ITER < 10) {
-			averageHydroIterationDuration = hydroErosionDuration;
-		} else if (HYDRO_ITER < 50) {
-			averageHydroIterationDuration = std::min(hydroErosionDuration,
-					averageHydroIterationDuration);
-		} else {
-			averageHydroIterationDuration =
-				0.98f * averageHydroIterationDuration
-				+
-				0.02f * hydroErosionDuration;
 		}
 	}
+	
+	grid.FullCycle();
+
+	if (updateHeights) {
+		const auto now = std::chrono::steady_clock::now();
+		auto dur = (now - lastUpdateHeightsTexture);
+		if (dur > std::chrono::milliseconds(240)) {
+			lastUpdateHeightsTexture = now;
+			updateHeights = false;
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+// 						const int i = _x + _y * width;
+					const int i = _x * height + _y;
+					const int t = grid.At(_x, _y);
+					float h = grid.ground[t].layers[0];// + grid.water[t] + grid.sediment[t];
+// 					float h = t->sediment;
+					h /= HYDRO_EROSION_Y_SCALE;
+					
+					if (h > -10000 && h < 50000) {
+					} else {
+						h = 0;
+					}
+					
+					vertHeights[i].h = h;
+					vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
+				}
+			}
+		}
+	}
+
+	if (updateWaterHeights) {
+		const auto now = std::chrono::steady_clock::now();
+		auto dur = (now - lastUpdateHeightsTexture);
+		if (dur > std::chrono::milliseconds(240)) {
+			lastUpdateHeightsTexture = now;
+// 				updateWaterHeights = false;
+			for (int _y = 0; _y < height; ++_y) {
+				for (int _x = 0; _x < width; ++_x) {
+// 						const int i = _x + _y * width;
+					const int i = _x * height + _y;
+					const int t = grid.At(_x, _y);
+					float h = grid.ground[t].layers[0] + grid.ground[t].layers[1];//grid.water[t];// + grid.ground[t].Total() + grid.sediment[t];
+// 						float h = grid.flux[t].fluxArray[0];// + grid.ground[t].Total() + grid.sediment[t];
+					h /= HYDRO_EROSION_Y_SCALE;
+					
+					if (h > -10000 && h < 50000) {
+					} else {
+						h = 0;
+					}
+					
+					vertHeights[i].h = h;
+					vertHeights[i].w = grid.water[t] / HYDRO_EROSION_Y_SCALE;
+				}
+			}
+		}
+	}
+
+	const auto b = std::chrono::steady_clock::now();
+	hydroErosionDuration =
+		std::chrono::nanoseconds(b - a).count() / 1'000'000.0f;
+	if (HYDRO_ITER < 10) {
+		averageHydroIterationDuration = hydroErosionDuration;
+	} else if (HYDRO_ITER < 50) {
+		averageHydroIterationDuration = std::min(hydroErosionDuration,
+				averageHydroIterationDuration);
+	} else {
+		averageHydroIterationDuration =
+			0.98f * averageHydroIterationDuration
+			+
+			0.02f * hydroErosionDuration;
+	}
+	
+	HYDRO_ITER = HYDRO_ITER + 1;
 }

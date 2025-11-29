@@ -1,4 +1,3 @@
-// #include <cmath>
 #include <cassert>
 
 #include <chrono>
@@ -10,26 +9,80 @@
 #include "../include/worldgen/HydroErosion.hpp"
 #include "HydroErosionPure.hpp"
 
-void Grid::Init(int width, int height)
+void Grid::CallHydroErosion()
 {
+	if (useGpu) {
+		gpu.CallUpdateRainAndRiver();
+		gpu.CallCalcOutFlux();
+		gpu.CallUpdateWaterLevelAndVelocity();
+		gpu.CallErosionAndDepositionCalculation();
+		gpu.CallErosionAndDepositionUpdate();
+		gpu.CallSedimentTransportation();
+		gpu.CallSedimentTransportationUpdate();
+	} else {
+		ForEachSafeBorders(HydroPure::CalcOutFlux);
+		ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
+		ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
+		ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
+		ForEachSafeBorders(HydroPure::SedimentTransportation);
+		ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
+	}
+}
+
+void Grid::CallThermalErosion()
+{
+	if (useGpu) {
+		gpu.CallThermalErosionCalculation();
+		gpu.CallThermalErosionUpdate();
+	} else {
+		ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
+		ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
+	}
+}
+void Grid::CallEvaporation() {
+	if (useGpu) {
+		gpu.CallEvaporation();
+	} else {
+		ForEachSafeBorders(HydroPure::Evaporation);
+	}
+}
+void Grid::CallSmoothing()
+{
+	// TODO: replace with selectional smoothing, to smooth only where slope
+	// changes very rapidly
+	if (useGpu) {
+		gpu.CallSmooth();
+		gpu.CallSmoothUpdate();
+	} else {
+		ForEachSafeBorders(HydroPure::Smooth);
+		ForEachSafeBorders(HydroPure::SmoothUpdate);
+	}
+}
+
+void Grid::Init(int width, int height, bool useGpu)
+{
+	this->useGpu = useGpu;
 	this->width = width;
 	this->height = height;
 	ground = new GroundLayers[width * height + OFF + 1] + OFF;
 	water = new float[width * height + OFF + 1] + OFF;
 	sediment = new float[width * height + OFF + 1] + OFF;
-	deltaSedimentGround = new float[width * height + OFF + 1] + OFF;
+	temp1 = new float[width * height + OFF + 1] + OFF;
 	velocity = new Velocity[width * height + OFF + 1] + OFF;
 	flux = new Flux[width * height + OFF + 1] + OFF;
 	for (int i = 1; i <= width * height; ++i) {
 		water[i] = 0.0f;
 		sediment[i] = 0.0f;
-		deltaSedimentGround[i] = 0.0f;
+		temp1[i] = 0.0f;
 		flux[i].f[0] = 0;
 		flux[i].f[1] = 0;
 		flux[i].f[2] = 0;
 		flux[i].f[3] = 0;
 		ground[i].layers[0] = 0;
 		ground[i].layers[1] = 0;
+	}
+	if (useGpu) {
+		gpu.Init(width, height, this);
 	}
 }
 
@@ -57,8 +110,8 @@ Grid::~Grid()
 	if (sediment) {
 		delete[] (sediment - OFF);
 	}
-	if (deltaSedimentGround) {
-		delete[] (deltaSedimentGround - OFF);
+	if (temp1) {
+		delete[] (temp1 - OFF);
 	}
 	if (velocity) {
 		delete[] (velocity - OFF);
@@ -66,30 +119,6 @@ Grid::~Grid()
 	if (flux) {
 		delete[] (flux - OFF);
 	}
-}
-
-void Grid::CallHydroErosion()
-{
-	ForEachSafeBorders(HydroPure::CalcOutflux);
-	ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
-	ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
-	ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
-	ForEachSafeBorders(HydroPure::SedimentTransportation);
-	ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
-}
-
-void Grid::CallThermalErosion()
-{
-	ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
-	ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
-}
-void Grid::CallEvaporation() { ForEachSafeBorders(HydroPure::Evaporation); }
-void Grid::CallSmoothing()
-{
-	// TODO: replace with selectional smoothing, to smooth only where slope
-	// changes very rapidly
-	ForEachSafeBorders(HydroPure::Smooth);
-	ForEachSafeBorders(HydroPure::SmoothUpdate);
 }
 
 constexpr int XDXDX = 4;
@@ -167,7 +196,7 @@ void Grid::FullCycle()
 	HydroPure::water = water;
 	HydroPure::ground = ground;
 	HydroPure::sediment = sediment;
-	HydroPure::deltaSedimentGround = deltaSedimentGround;
+	HydroPure::temp1 = temp1;
 	HydroPure::velocity = velocity;
 	HydroPure::flux = flux;
 
@@ -200,6 +229,11 @@ void Grid::FullCycle()
 		// changes very rapidly
 		CallSmoothing();
 	}
+}
+
+void Grid::UpdateHeightsTexture(gl::Texture *tex)
+{
+	gpu.UpdateHeightsTexture(tex);
 }
 
 #undef SAFE_COND_GRID

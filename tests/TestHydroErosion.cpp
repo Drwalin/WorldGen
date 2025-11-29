@@ -25,7 +25,7 @@ int main(int argc, char ** argv) {
 	
 	
 	printf("Loaded [%u x %u]\n", width, height);
-	grid.Init(width, height);
+	grid.Init(width, height, false);
 	data = new float[width*height];
 // 	for(size_t i = 0; i<(size_t)width * (size_t)height; ++i)
 // 		grid.ground[i][0] = data[i];

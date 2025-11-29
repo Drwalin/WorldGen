@@ -84,10 +84,10 @@ namespace HydroPure
 {
 #endif
 
-layout(binding = 2) BUFFER(BufferBlock2, float, water);
 layout(binding = 1) BUFFER(BufferBlock1, GroundLayers, ground);
+layout(binding = 2) BUFFER(BufferBlock2, float, water);
 layout(binding = 3) BUFFER(BufferBlock3, float, sediment);
-layout(binding = 4) BUFFER(BufferBlock4, float, deltaSedimentGround);
+layout(binding = 4) BUFFER(BufferBlock4, float, temp1);
 layout(binding = 5) BUFFER(BufferBlock5, Velocity, velocity);
 layout(binding = 6) BUFFER(BufferBlock6, Flux, flux);
 
@@ -104,16 +104,19 @@ static uniform float minimumSedimentCapacity;
 
 inline float TotalGround(int t)
 {
-	return ground[t].layers[0] + ground[t].layers[1];
+	GroundLayers g = ground[t];
+	return g.layers[0] + g.layers[1];
 }
 
 inline void AddGeneralGround(int t, float dv)
 {
-	ground[t].layers[1] += dv;
-	if (ground[t].layers[1] < 0) {
-		ground[t].layers[0] += ground[t].layers[1];
-		ground[t].layers[1] = 0;
+	GroundLayers g = ground[t];
+	g.layers[1] += dv;
+	if (g.layers[1] < 0) {
+		g.layers[0] += g.layers[1];
+		g.layers[1] = 0;
 	}
+	ground[t] = g;
 }
 
 inline int At(int x, int y)
@@ -180,7 +183,7 @@ inline void LimitFlux(int src)
 	}
 }
 
-inline void CalcOutflux(int x, int y)
+inline void CalcOutFlux(int x, int y)
 {
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
@@ -271,46 +274,50 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 			float f2 = (f - l1) * hardness[0] / hardness[1];
 			f = ground[src].layers[1] + f2;
 		}
-		deltaSedimentGround[src] = f;
+		temp1[src] = f;
 	} else {
 		// depositing sediment
-		deltaSedimentGround[src] = Kd * delta;
+		temp1[src] = Kd * delta;
 	}
 }
 
 inline void ErosionAndDepositionUpdate(int x, int y)
 {
 	int src = At(x, y);
-	float ds = deltaSedimentGround[src];
+	float ds = temp1[src];
 	AddGeneralGround(src, -ds);
 	sediment[src] += ds;
-	deltaSedimentGround[src] = 0;
+	temp1[src] = 0;
 }
 
 inline void SedimentTransportation(int x, int y)
 {
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
+	float tmp = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0, {
 		const float sum = SumFlux(neighs[DIR]);
 		if (sum > 0) {
 			const float neighSed = sediment[neighs[DIR]];
 			const float incomingFlux = flux[neighs[DIR]].f[R_DIR];
 			const float dV = dt * neighSed * incomingFlux / sum;
-			deltaSedimentGround[src] += dV;
+			tmp += dV;
 		}
 	})
+	float sed = sediment[src];
+	tmp = tmp + sed * (1.0 - dt);
+	temp1[src] = tmp;
 }
 
 inline void SedimentTransportationUpdate(int x, int y)
 {
 	int src = At(x, y);
-	float f = SumFlux(src);
-	if (f > 0) {
-		sediment[src] *= 1 - dt;
-	}
-	sediment[src] += deltaSedimentGround[src];
-	deltaSedimentGround[src] = 0;
+	// 	float f = SumFlux(src);
+	// 	float sed = sediment[src];
+	// 	if (f > 0) {
+	// 		sed *= 1 - dt;
+	// 	}
+	sediment[src] = /*sed */ +temp1[src];
 }
 
 inline void ThermalErosionCalculation(int x, int y)
@@ -318,9 +325,10 @@ inline void ThermalErosionCalculation(int x, int y)
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
 	NEIGHBOURS_CORNERS(neighCorners, x, y);
-	deltaSedimentGround[src] = 0;
-	float _h11 = ground[src].layers[1];
-	float _h0 = ground[src].layers[0];
+	temp1[src] = 0;
+	GroundLayers g = ground[src];
+	float _h11 = g.layers[1];
+	float _h0 = g.layers[0];
 	float _h1 = _h0 + _h11;
 	float t1 = tangentOfAngleOfRecluse[1] * l;
 	float t0 = tangentOfAngleOfRecluse[0] * l;
@@ -336,9 +344,10 @@ inline void ThermalErosionCalculation(int x, int y)
 			if (neighs[i] == 0) {
 				continue;
 			}
-			
-			n0 = ground[neighs[i]].layers[0];
-			n11 = ground[neighs[i]].layers[1];
+
+			GroundLayers g = ground[neighs[i]];
+			n0 = g.layers[0];
+			n11 = g.layers[1];
 			n1 = n0 + n11;
 
 			float h0 = _h0;
@@ -376,18 +385,18 @@ inline void ThermalErosionCalculation(int x, int y)
 		t1 = t1 * 2.0 * halfSqrt2;
 		t0 = t0 * 2.0 * halfSqrt2;
 	}
-	deltaSedimentGround[src] = delta * (1.0 / 8.0) * 0.5 * dt;
+	temp1[src] = delta * (1.0 / 8.0) * 0.5 * dt;
 }
 
 inline void ThermalErosionUpdate(int x, int y)
 {
 	int src = At(x, y);
-	AddGeneralGround(src, deltaSedimentGround[src]);
+	AddGeneralGround(src, temp1[src]);
 }
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.01; // Make it dependent on temperature in place (x,y)
+	return 0.04; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)
@@ -404,20 +413,20 @@ inline void Smooth(int x, int y)
 	float sum = TotalGround(src) * (mult - 4);
 	FOR_EACH_DIR(sum += ((neighs[DIR] != 0) ? TotalGround(neighs[DIR])
 											: TotalGround(src));)
-	deltaSedimentGround[src] = sum / mult;
+	temp1[src] = sum / mult;
 }
 
 inline void SmoothUpdate(int x, int y)
 {
 	int src = At(x, y);
-	float dh = deltaSedimentGround[src] - TotalGround(src);
+	float dh = temp1[src] - TotalGround(src);
 	ground[src].layers[0] += dh;
 }
 
 inline void ClearDelta(int x, int y)
 {
 	int src = At(x, y);
-	deltaSedimentGround[src] = 0;
+	temp1[src] = 0;
 }
 
 #if GL_core_profile

@@ -28,6 +28,7 @@ add_library(WorldGen STATIC
 	thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.cpp
 	thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp
 )
+target_link_libraries(WorldGen OpenGLWrapper)
 
 if(WORLDGEN_3D_RENDERER)
 	add_subdirectory(${WORLDGEN_OPENGLWRAPPER_DIR} ./build/OpenGLWrapper)
