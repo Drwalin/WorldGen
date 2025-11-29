@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
 	
-	DefaultsSetup();
+	DefaultsSetup(false);
 
 	// Load shader
 	gl::Shader shader;
@@ -336,7 +336,9 @@ int main(int argc, char **argv)
 		
 		gl::openGL.PrintErrors();
 		
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		if (useGpu == false || gridInited == false) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
 	}
 
 	gl::openGL.Destroy();
@@ -483,7 +485,7 @@ void HydroErosionIteration()
 						}
 					}
 				}
-				grid.water[t] = 10.0;
+				grid.water[t] = 0.1;
 			}
 		}
 		if (riverSources.size() > 0) {

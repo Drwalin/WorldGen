@@ -11,7 +11,7 @@ Grid::GPUCompute::~GPUCompute()
 	delete vboTemp1;
 	delete vboVelocity;
 	delete vboFlux;
-	
+
 	delete vboRiverSources;
 }
 
@@ -47,9 +47,9 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 							  gl::DYNAMIC_DRAW);
 	vboFlux = new gl::VBO(sizeof(flux[0]), gl::SHADER_STORAGE_BUFFER,
 						  gl::DYNAMIC_DRAW);
-	
-	vboRiverSources = new gl::VBO(12, gl::SHADER_STORAGE_BUFFER,
-						  gl::DYNAMIC_DRAW);
+
+	vboRiverSources =
+		new gl::VBO(12, gl::SHADER_STORAGE_BUFFER, gl::DYNAMIC_DRAW);
 
 	vboGround->Init(width * height + 1);
 	vboWater->Init(width * height + 1);
@@ -88,7 +88,7 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 		shaderEvaporation.Unuse();
 	}
 	shaderEvaporation.Unuse();
-	
+
 	shaderUpdateHeightTexture.Compile(baseCode + R"(
 
 layout (binding = 0, rg32f) uniform image2D heightsTex;
@@ -115,9 +115,7 @@ void main() {
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vboRiverSources->GetIdGL());
 	SetUniforms(&shaderUpdateHeightTexture);
 	shaderUpdateHeightTexture.Unuse();
-	
-	
-	
+
 	shaderUpdateRainAndRiver.Compile(baseCode + R"(
 
 layout(binding = 7) BUFFER(BufferBlock7, vec3, riverSources);
@@ -131,7 +129,7 @@ void main() {
 	}
 	int id = At(x, y);
 	float w = water[id];
-	water[id] = w + 0.01;
+	water[id] = w + 0.01 * dt;
 }
 )");
 	shaderUpdateRainAndRiver.Use();
@@ -155,10 +153,10 @@ void Grid::GPUCompute::SetUniforms(gl::Shader *shader)
 {
 	shader->Use();
 	shader->SetFloat(shader->GetUniformLocation("hardness"),
-			{grid->hardness[0], grid->hardness[1]});
-	shader->SetFloat(shader->GetUniformLocation("tangentOfAngleOfRecluse"),
-			{grid->tangentOfAngleOfRecluse[0],
-							  grid->tangentOfAngleOfRecluse[1]});
+					 {grid->hardness[0], grid->hardness[1]});
+	shader->SetFloat(
+		shader->GetUniformLocation("tangentOfAngleOfRecluse"),
+		{grid->tangentOfAngleOfRecluse[0], grid->tangentOfAngleOfRecluse[1]});
 	shader->SetInt(shader->GetUniformLocation("width"), width);
 	shader->SetInt(shader->GetUniformLocation("height"), height);
 	shader->SetFloat(shader->GetUniformLocation("dt"), grid->dt);
@@ -171,10 +169,7 @@ void Grid::GPUCompute::SetUniforms(gl::Shader *shader)
 					 grid->minimumSedimentCapacity);
 }
 
-void Grid::GPUCompute::CallCalcOutFlux()
-{
-	CallShader(&shaderCalcOutFlux);
-}
+void Grid::GPUCompute::CallCalcOutFlux() { CallShader(&shaderCalcOutFlux); }
 void Grid::GPUCompute::CallUpdateWaterLevelAndVelocity()
 {
 	CallShader(&shaderUpdateWaterLevelAndVelocity);
@@ -203,23 +198,13 @@ void Grid::GPUCompute::CallThermalErosionUpdate()
 {
 	CallShader(&shaderThermalErosionUpdate);
 }
-void Grid::GPUCompute::CallEvaporation()
-{
-	CallShader(&shaderEvaporation);
-}
-void Grid::GPUCompute::CallSmooth()
-{
-	CallShader(&shaderSmooth);
-}
-void Grid::GPUCompute::CallSmoothUpdate()
-{
-	CallShader(&shaderSmoothUpdate);
-}
+void Grid::GPUCompute::CallEvaporation() { CallShader(&shaderEvaporation); }
+void Grid::GPUCompute::CallSmooth() { CallShader(&shaderSmooth); }
+void Grid::GPUCompute::CallSmoothUpdate() { CallShader(&shaderSmoothUpdate); }
 
 void Grid::GPUCompute::CallShader(gl::Shader *shader)
 {
 	shader->Use();
-	BindBuffers();
 	shader->DispatchRoundGroupNumbers(width, height, 1);
 	shader->Unuse();
 }
@@ -228,10 +213,9 @@ void Grid::GPUCompute::CallUpdateRainAndRiver()
 {
 	gl::Shader *shader = &shaderUpdateRainAndRiver;
 	shader->Use();
-	BindBuffers();
-	
+
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vboRiverSources->GetIdGL());
-	
+
 	shader->DispatchRoundGroupNumbers(width, height, 1);
 	shader->Unuse();
 }
@@ -240,17 +224,15 @@ void Grid::GPUCompute::UpdateHeightsTexture(gl::Texture *tex)
 {
 	gl::Shader *shader = &shaderUpdateHeightTexture;
 	shader->Use();
-	BindBuffers();
-	
+
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, vboRiverSources->GetIdGL());
-	
+
 	tex->Bind();
 	GL_CHECK_PUSH_ERROR;
-	shader->SetInt(textureUniformLocation, 0);
+	glBindImageTexture(0, tex->GetIdGL(), 0, GL_FALSE, 0, GL_WRITE_ONLY,
+					   gl::RG32F);
 	GL_CHECK_PUSH_ERROR;
-    glBindImageTexture(0, tex->GetIdGL(), 0, GL_FALSE, 0, GL_WRITE_ONLY, gl::RG32F);
-	GL_CHECK_PUSH_ERROR;
-	
+
 	shader->DispatchRoundGroupNumbers(width, height, 1);
 	shader->Unuse();
 }
@@ -288,5 +270,7 @@ void Grid::GPUCompute::UpdateFlux(Flux *data)
 void Grid::GPUCompute::UpdateRiverSources(glm::vec3 *data, int amount)
 {
 	gl::VBO *vbo = vboRiverSources;
-	vbo->Update(data, 0, std::min<int>(vbo->GetVertexCount(), amount) * vbo->VertexSize());
+	vbo->Update(data, 0,
+				std::min<int>(vbo->GetVertexCount(), amount) *
+					vbo->VertexSize());
 }
