@@ -19,6 +19,7 @@
 
 #include "../../include/worldgen/HydroErosion.hpp"
 #include "../../include/worldgen/Noises.hpp"
+#include "../ArgumentsParser.hpp"
 
 volatile bool useGpu = true;
 volatile bool gridInited = false;
@@ -89,18 +90,19 @@ Grid grid;
 
 int main(int argc, char **argv)
 {
-	width = argc > 2 ? atoi(argv[2]) : 512 + 64;
-	if (width < 512 + 64) {
-		width = 512+64;
-	}
-	if (width > 16384) {
-		width = 16384;
-	}
+	ArgumentParser args{argc, argv};
+	width = args.Int("width", 512+64, 16384, 512+64);
 	height = width;
-	riverSourcesCount = argc > 3 ? clamp(atoi(argv[3]), 0, 1000) : 4;
-	generatorYScale = argc > 4 ? clamp((float)atof(argv[4]), 0.001f, 100.0f) : 1.0f;
-	SOFT_LAYER = argc > 5 ? clamp((float)atof(argv[4]), 0.0f, 1000.0f) : 1.0f;
-	const int maxMeshSize = argc > 1 ? atoi(argv[1]) : 512;
+	riverSourcesCount = args.Int("riverSources", 0, 10000, 0);
+	generatorYScale = args.Float("scaleY", 0.001f, 100.0f, 1.0f);
+	SOFT_LAYER = args.Float("softLayerDepth", 0.0f, 1000.0f, 1.0f);
+	const int maxMeshSize = args.Int("meshSize", 64, 4096, 512);
+	
+	if (args.Bool("help")) {
+		args.PrintHelp();
+		return 0;
+	}
+	
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
 	
