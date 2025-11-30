@@ -1,4 +1,3 @@
-
 #if !defined HYDRO_EROSION_STRUCTS_DEFINED
 #define HYDRO_EROSION_STRUCTS_DEFINED
 struct Flux {
@@ -14,4 +13,3 @@ struct GroundLayers {
 	float layers[2];
 };
 #endif
-

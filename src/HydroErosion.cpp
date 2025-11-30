@@ -96,7 +96,7 @@ Grid::Grid()
 
 	depositionConstant = 0.03;
 	sedimentCapacityConstant = 0.03;
-	minimumSedimentCapacity = 0.1;
+	minimumSedimentCapacity = 0.03;
 }
 
 Grid::~Grid()

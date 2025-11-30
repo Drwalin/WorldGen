@@ -36,11 +36,11 @@ struct Grid {
 	GroundLayers *ground = nullptr;
 	float *water = nullptr;
 	float *sediment = nullptr;
-	float hardness[2] = {0.03, 0.07};
 	float *temp1 = nullptr;
 	Velocity *velocity = nullptr;
 	Flux *flux = nullptr;
 
+	float hardness[2] = {0.003, 0.02};
 	// tan(30) ~= 0.577
 	// tan(45) ~= 1
 	// tan(60) ~= 1.732
@@ -49,28 +49,28 @@ struct Grid {
 	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 45*
 
 	int width, height;
-	float dt;
+	float dt = 0.03;
 	union {
-		float A;
+		float A = 0.6;
 		float crossSectionalAreaOfPipe;
 	};
 	union {
-		float g;
+		float g = 9.81;
 		float gravity;
 	};
 	union {
-		float l;
+		float l = 1.0;
 		float tileDimensionSize;
 	};
 	union {
-		float Kd;
+		float Kd = 0.03;
 		float depositionConstant;
 	};
 	union {
-		float Kc;
+		float Kc = 0.03;
 		float sedimentCapacityConstant;
 	};
-	float minimumSedimentCapacity;
+	float minimumSedimentCapacity = 0.03;
 
 	inline int At(int x, int y) const
 	{

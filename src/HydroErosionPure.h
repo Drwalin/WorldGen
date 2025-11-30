@@ -1,7 +1,7 @@
 
-%:include "../include/worldgen/GlslSharedWithCpp_Header.h"
-%:include "../include/worldgen/HydroErosionMacros.h"
-%:include "../include/worldgen/HydroErosionStructs.h"
+#include "../include/worldgen/GlslSharedWithCpp_Header.h"
+#include "../include/worldgen/HydroErosionMacros.h"
+#include "../include/worldgen/HydroErosionStructs.h"
 
 #if GL_core_profile
 #else

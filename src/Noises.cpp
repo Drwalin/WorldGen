@@ -24,6 +24,16 @@
 #include "../include/worldgen/Hash.hpp"
 #include "../include/worldgen/Noises.hpp"
 
+#include "../include/worldgen/GlslSharedWithCpp_Header.h"
+namespace glsl_noise
+{
+using namespace glm;
+#include "../thirdparty/webgl-noise/src/noise4D.glsl"
+#include "../thirdparty/webgl-noise/src/psrdnoise2D.glsl"
+#include "../thirdparty/psrdnoise/src/psrdnoise2.glsl"
+#include "../thirdparty/psrdnoise/src/psrdnoise3.glsl"
+} // namespace glsl_noise
+
 namespace wg
 {
 
@@ -89,7 +99,8 @@ static inline float Cubic(float a, float b, float f)
 	return a * (1 - f) + b * f;
 }
 
-float Noise::NoiseV(glm::vec2 uv, int seed)
+/*
+float _Noise::NoiseV(glm::vec2 uv, int seed)
 {
 	// 	return Lanczos(uv, seed);
 
@@ -104,7 +115,7 @@ float Noise::NoiseV(glm::vec2 uv, int seed)
 
 static inline float CubicDerivative(float f) { return f * (-6 * f + 6); }
 
-glm::vec3 Noise::NoiseVG(glm::vec2 uv, int seed)
+glm::vec3 _Noise::NoiseVG(glm::vec2 uv, int seed)
 {
 	glm::vec2 u = glm::floor(uv);
 	glm::vec2 f = glm::fract(uv);
@@ -137,7 +148,7 @@ glm::vec3 Noise::NoiseVG(glm::vec2 uv, int seed)
 #define INTERPOLANT 0
 
 // return value noise (in x) and its derivatives (in yzw)
-float Noise::NoiseDV(glm::vec3 x)
+float _Noise::NoiseDV(glm::vec3 x)
 {
 	glm::ivec3 i = glm::ivec3(floor(x));
 	glm::vec3 w = glm::fract(x);
@@ -174,7 +185,7 @@ float Noise::NoiseDV(glm::vec3 x)
 }
 
 // return value noise (in x) and its derivatives (in yzw)
-glm::vec4 Noise::NoiseD(glm::vec3 x)
+glm::vec4 _Noise::NoiseD(glm::vec3 x)
 {
 	glm::ivec3 i = glm::ivec3(floor(x));
 	glm::vec3 w = glm::fract(x);
@@ -214,7 +225,7 @@ glm::vec4 Noise::NoiseD(glm::vec3 x)
 									k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y));
 }
 
-glm::vec4 Noise::FractalBrownianMotion(glm::vec3 x, int octaves)
+glm::vec4 _Noise::FractalBrownianMotion(glm::vec3 x, int octaves)
 {
 	float f = 1.98; // could be 2.0f
 	float s = 0.49; // could be 0.5
@@ -228,27 +239,27 @@ glm::vec4 Noise::FractalBrownianMotion(glm::vec3 x, int octaves)
 		a += b * n.x;						   // accumulate values
 		d += b * m * glm::vec3(n.y, n.z, n.w); // accumulate derivatives
 		b *= s;
-		x = f * m /*3*/ * x;
-		m = f * m /*3i*/ * m;
+		x = f * m * x; // *3;
+		m = f * m * m; // *3;
 	}
 	return glm::vec4(a, d);
 }
 
-float Noise::fbm(glm::vec3 x, float H, int octaves)
+float _Noise::fbm(glm::vec3 x, float H, int octaves)
 {
 	float G = exp2(-H);
 	float f = 1.0;
 	float a = 1.0;
 	float t = 0.0;
 	for (int i = 0; i < octaves; i++) {
-		t += a * Noise::NoiseD(f * x).x;
+		t += a * _Noise::NoiseD(f * x).x;
 		f *= 2.0;
 		a *= G;
 	}
 	return t;
 }
 
-float Noise::Terrain(glm::vec3 _p)
+float _Noise::Terrain(glm::vec3 _p)
 {
 	constexpr glm::mat2 m = glm::mat2(0.8, -0.6, 0.6, 0.8);
 	glm::vec2 p = {_p.x, _p.z};
@@ -265,7 +276,7 @@ float Noise::Terrain(glm::vec3 _p)
 	return a;
 }
 
-float Noise::NoiseDV(glm::vec2 x)
+float _Noise::NoiseDV(glm::vec2 x)
 {
 	glm::vec2 i = floor(x);
 	glm::vec2 f = fract(x);
@@ -287,7 +298,7 @@ float Noise::NoiseDV(glm::vec2 x)
 }
 
 // return value noise (in x) and its derivatives (in yzw)
-glm::vec3 Noise::NoiseD(glm::vec2 x)
+glm::vec3 _Noise::NoiseD(glm::vec2 x)
 {
 	glm::vec2 i = floor(x);
 	glm::vec2 f = fract(x);
@@ -313,7 +324,7 @@ glm::vec3 Noise::NoiseD(glm::vec2 x)
 							   glm::vec2(vb, vc) - va));
 }
 
-glm::vec3 Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
+glm::vec3 _Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
 {
 	float f = 1.98; // could be 2.0f
 	float s = 0.49; // could be 0.5
@@ -331,13 +342,13 @@ glm::vec3 Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
 		a += b * n.x;					 // accumulate values
 		d += b * glm::vec3(n.y, n.z, 0); // accumulate derivatives
 		b *= s;
-		x = f * m /*3*/ * glm::vec3(x, 0);
-		m = f * m /*3i*/ * m;
+		x = f * m * glm::vec3(x, 0); // * 3;
+		m = f * m * m; // * 3;
 	}
 	return glm::vec3(a, d.x, d.y);
 }
 
-float Noise::fbm(glm::vec2 x, float H, int octaves)
+float _Noise::fbm(glm::vec2 x, float H, int octaves)
 {
 	return FractalBrownianMotion(x, octaves).x;
 
@@ -346,15 +357,15 @@ float Noise::fbm(glm::vec2 x, float H, int octaves)
 	float a = 1.0;
 	float t = 0.0;
 	for (int i = 0; i < octaves; i++) {
-		t += a * Noise::NoiseV(f * x);
+		t += a * _Noise::NoiseV(f * x);
 		f *= 2.0;
 		a *= G;
 	}
 	return t;
 }
 
-float Noise::Ridges(glm::vec2 x, float horizontalScale, float steep,
-					float octaves, float gradientInfluence, int seed)
+float _Noise::Ridges(glm::vec2 x, float horizontalScale, float steep,
+					 float octaves, float gradientInfluence, int seed)
 {
 	float h = 0;
 	float f = 1;
@@ -383,8 +394,8 @@ float Noise::Ridges(glm::vec2 x, float horizontalScale, float steep,
 	return h / div;
 }
 
-float Noise::Ridges2(glm::vec2 x, float horizontalScale, float steep,
-					 float octaves, float gradientInfluence, int seed)
+float _Noise::Ridges2(glm::vec2 x, float horizontalScale, float steep,
+					  float octaves, float gradientInfluence, int seed)
 {
 	float h = 0;
 	float f = 1;
@@ -413,7 +424,7 @@ float Noise::Ridges2(glm::vec2 x, float horizontalScale, float steep,
 	return h / div;
 }
 
-float Noise::Terrain(glm::vec2 p, float horizontalScale)
+float _Noise::Terrain(glm::vec2 p, float horizontalScale)
 {
 	float hr = Ridges2(p, horizontalScale, 0.8, 3, 0.99, 14321);
 	float hr2 =
@@ -422,10 +433,16 @@ float Noise::Terrain(glm::vec2 p, float horizontalScale)
 	float h = Ridges2(p * 90.0f, horizontalScale * 90, 0.6, 3, 0, 32131);
 	return h * 0.02 + hr * 0.98;
 }
+*/
 
-OpenSimplex2F::OpenSimplexEnv *SimplexNoise::ose = OpenSimplex2F::initOpenSimplex();
+OpenSimplex2F::OpenSimplexEnv *SimplexNoise::ose =
+	OpenSimplex2F::initOpenSimplex();
 
-SimplexNoise::SimplexNoise(uint64_t seed) { osg = nullptr; Init(seed); }
+SimplexNoise::SimplexNoise(uint64_t seed)
+{
+	osg = nullptr;
+	Init(seed);
+}
 
 SimplexNoise::~SimplexNoise() { OpenSimplex2F::FreeOSG(osg); }
 
@@ -439,75 +456,124 @@ void SimplexNoise::Init(uint64_t seed)
 
 float SimplexNoise::Noise(glm::vec2 p)
 {
+	glm::vec2 grad;
+	return (glsl_noise::psrdnoise(p, {0.0f, 0.0f}, 0.0f, grad) + 1.0f) * 0.5f;
 	return (OpenSimplex2F::noise2(ose, osg, p.x, p.y) + 1.0) * 0.5;
 }
 
 float SimplexNoise::Noise(glm::vec3 p)
 {
+	glm::vec3 grad;
+	return (glsl_noise::psrdnoise(p, {0.0f, 0.0f, 0.0f}, 0.0f, grad) + 1.0f) *
+		   0.5f;
 	return (OpenSimplex2F::noise3_Classic(ose, osg, p.x, p.y, p.z) + 1.0) * 0.5;
 }
 
 float SimplexNoise::Noise(glm::vec4 p)
 {
-	return (OpenSimplex2F::noise4_Classic(ose, osg, p.x, p.y, p.z, p.w) + 1.0) * 0.5;
+	return (glsl_noise::snoise(p) + 1.0f) * 0.5f;
+	return (OpenSimplex2F::noise4_Classic(ose, osg, p.x, p.y, p.z, p.w) + 1.0) *
+		   0.5;
 }
 
 float SimplexNoise::Noise2(glm::vec2 p)
 {
-	return CubicFactor(CubicFactor((Noise(p) + Noise(-p+glm::vec2{13,-27}))*0.5f));
+	return CubicFactor(
+		CubicFactor((Noise(p) + Noise(-p + glm::vec2{13, -27})) * 0.5f));
 }
 
 float SimplexNoise::Noise2(glm::vec3 p)
 {
-	return (Noise(p) + Noise(-p+glm::vec3{13,-27,43}))*0.5f;
+	return (Noise(p) + Noise(-p + glm::vec3{13, -27, 43})) * 0.5f;
 }
 
 float SimplexNoise::Noise2(glm::vec4 p)
 {
-	return (Noise(p) + Noise(-p+glm::vec4{13,-27,43,-51}))*0.5f;
+	return (Noise(p) + Noise(-p + glm::vec4{13, -27, 43, -51})) * 0.5f;
 }
 
 float SimplexNoise::Fbm(glm::vec2 p, int octaves, float attenuation,
-						float coordMultiplier, bool useGrad, bool useNoise2, float verticalScale)
+						float coordMultiplier, bool useGrad, bool useNoise2,
+						float verticalScale)
 {
+	p *= 9.0f;
 	float (SimplexNoise::*noise)(glm::vec2) = &SimplexNoise::Noise;
 	if (useNoise2) {
 		noise = &SimplexNoise::Noise2;
 	}
-	
-	glm::vec2 g{0,0};
+
+	glm::vec2 g{0, 0};
 	float dx = 0.001;
-	
+
 	float h = 0;
 	float a = 1;
 	float sum = 0;
-	for (int i=0; i<octaves; ++i) {
+	for (int i = 0; i < octaves; ++i) {
 		float h0, h1, h2;
-		h0 = (this->*noise)(p) * a * verticalScale;
+
+		glm::vec2 grad;
+		h0 = (glsl_noise::psrdnoise(p, {0.0f, 0.0f}, 0.0f, grad) + 1.0f) *
+			 0.5f * a;
+		/*
+		h0 = (this->*noise)(p)*a * verticalScale;
+		*/
 		if (useGrad) {
-			h1 = (this->*noise)(p+glm::vec2{dx,0.0f}) * a * verticalScale;
-			h2 = (this->*noise)(p+glm::vec2{0.0f,dx}) * a * verticalScale;
-			g += (glm::vec2{h1, h2} - h0 ) /dx;
-			h += h0 / (1.0f + glm::dot(g,g));
+			/*
+			h1 = (this->*noise)(p + glm::vec2{dx, 0.0f}) * a * verticalScale;
+			h2 = (this->*noise)(p + glm::vec2{0.0f, dx}) * a * verticalScale;
+			g += (glm::vec2{h1, h2} - h0) / dx;
+			*/
+			g += grad * a;
+			h += h0 / (1.0f + glm::dot(g, g));
 		} else {
 			h += h0;
 		}
-		
+
 		sum += a;
 		p *= coordMultiplier;
 		a *= attenuation;
 	}
-	return h / sum;
+	return h * verticalScale / sum;
+}
+
+float NoiseRidges(glm::vec2 st)
+{
+	const float nscale = 5.0;
+	glm::vec2 v = nscale * (st - 0.5f);
+	const glm::vec2 p = glm::vec2(4.0, 4.0);
+	float alpha = 0;
+	glm::vec2 g, gsum;
+	float warp = 0.13; // Nice "puffy clouds" warping
+
+	float n = 0.0;
+	float w = 1.0;
+	float s = 1.0;
+	gsum = glm::vec2(0.0);
+	for (float i = 0.0; i < 8.0; i++) {
+		n +=
+			w * glsl_noise::psrdnoise(s * v + warp * gsum, s * p, s * alpha, g);
+		gsum += w * g;
+		w *= 0.5;
+		s *= 2.0;
+	}
+
+	return 1.0f - n * 0.5f;
 }
 
 float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 {
+// 	return NoiseRidges(p*0.5f);
+// 	glm::vec2 grad;
+// 	return glsl_noise::psrdnoise(p * 30.0f, {0.0f, 0.0f}, 0.0f, grad) * 0.5f + 0.5f;
+// 	return Fbm(p, 20, 5.0/7.0, 1.3, false, false, 0.4 + 0.6 * Noise(p * 0.1f + 123.f));
 	int octaves = 14;
-	bool useTwo = true;
-	float biome = Noise(-p*0.2f - 321.f);
-	float scale = Noise(p*0.4f + 123.f);
-	float mountains = Fbm(p, octaves, 0.53, 2.3, true, useTwo, scale * 0.6 + 0.4);
-	float plains = Fbm(p*0.3f-100.0f, octaves, 0.5, 2.3, false, useTwo, scale * 0.8 + 0.2);
+	bool useTwo = false;
+	float biome = Noise(-p * 0.2f - 321.f);
+	float scale = Noise(p * 0.4f + 123.f);
+	float mountains =
+		Fbm(p, octaves, 0.53, 2.3, true, useTwo, scale * 0.6 + 0.4);
+	float plains = Fbm(p * 0.3f - 100.0f, octaves, 0.5, 2.3, false, useTwo,
+					   scale * 0.8 + 0.2);
 	float h;
 	if (biome < 0.25) {
 		h = plains;
@@ -515,10 +581,11 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 		float f = (biome - 0.25) / 0.25;
 		f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 		h = plains + f * mountains;
-	} else{
+	} else {
 		h = plains + mountains;
 	}
-	return h * 0.5f;;
+	return h * 0.5f;
+	;
 }
 
 } // namespace wg

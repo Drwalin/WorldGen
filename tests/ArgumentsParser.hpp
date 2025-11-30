@@ -100,13 +100,8 @@ struct ArgumentParser {
 		return v;
 	}
 	
-	void PrintHelp() { PrintHelp(false); }
-	
-	void PrintHelp(bool force)
+	void PrintHelp()
 	{
-		if (Bool("help") == false && force == false) {
-			return;
-		}
 		printf("Available program arguments:\n");
 		for (auto c : args) {
 			printf("   -%s\n", c.c_str());

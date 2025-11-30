@@ -336,7 +336,7 @@ int main(int argc, char **argv)
 			gl::Flush();
 		}
 		if (useGpu == false || gridInited == false || disableRender) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::this_thread::sleep_for(std::chrono::milliseconds(3));
 		}
 
 		if (disableRender) {
@@ -414,14 +414,14 @@ void ThreadFunction()
 
 					p.y += 750.f / SCALE;
 
-					p.x += (simplex.Fbm(glm::vec2(-p.x / 53 + 100, p.y / 53 - 1000),
-									  3, 0.5, 2.3, false, false, 1.0f) -
-						  0.5) *
-						 10;
-					p.y += (simplex.Fbm(glm::vec2(+p.x / 53 - 1000, -p.y / 53 + 100),
-									  3, 0.5, 2.3, false, false, 1.0f) -
-						  0.5) *
-						 10;
+// 					p.x += (simplex.Fbm(glm::vec2(-p.x / 53 + 100, p.y / 53 - 1000),
+// 									  3, 0.5, 2.3, false, false, 1.0f) -
+// 						  0.5) *
+// 						 10;
+// 					p.y += (simplex.Fbm(glm::vec2(+p.x / 53 - 1000, -p.y / 53 + 100),
+// 									  3, 0.5, 2.3, false, false, 1.0f) -
+// 						  0.5) *
+// 						 10;
 
 					v.x =
 						simplex.Terrain(glm::vec2{p.x, p.y} * noiseHorizontalScale,

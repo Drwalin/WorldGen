@@ -105,7 +105,8 @@ void main() {
 	int id = At(x, y);
 	GroundLayers g = ground[id];
 	float w = water[id];
-	vec2 h = vec2(g.layers[0] + g.layers[1], w);
+	float sed = sediment[id];
+	vec2 h = vec2(g.layers[0] + g.layers[1] + sed, w);
 	
 	imageStore(heightsTex, ivec2(x, y), vec4(h, 0, 0));
 }

@@ -28,7 +28,8 @@
 
 namespace wg
 {
-class Noise
+/*
+class _Noise
 {
 public:
 	static float NoiseV(glm::vec2 x, int seed = 0);
@@ -51,6 +52,7 @@ public:
 	
 	static float Terrain(glm::vec2 p, float horizontalScale);
 };
+*/
 
 class SimplexNoise
 {
@@ -75,5 +77,7 @@ public:
 private:
 	static OpenSimplex2F::OpenSimplexEnv *ose;
 	OpenSimplex2F::OpenSimplexGradients *osg = nullptr;
+	uint64_t seed;
+	float seedf[16];
 };
 } // namespace wg
