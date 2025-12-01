@@ -130,7 +130,13 @@ void main() {
 	}
 	int id = At(x, y);
 	float w = water[id];
-	water[id] = w + 0.01 * dt;
+// 	water[id] = w + 0.01 * dt;
+	
+	vec3 coord = vec3(float(x) * 0.01, float(y) * 0.01, float(iteration) * 0.1);
+	vec3 grad;
+	float val = psrdnoise(coord, vec3(0, 0, 0), float(iteration % 1000) / 312.0, grad);
+	val = clamp(val, 0.0, 1.0);
+	water[id] = w + val * 0.01 * dt;
 }
 )");
 	shaderUpdateRainAndRiver.Use();

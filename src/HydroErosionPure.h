@@ -5,6 +5,19 @@
 
 #if GL_core_profile
 #else
+namespace glsl_noise
+{
+using namespace glm;
+#endif
+#include "../thirdparty/webgl-noise/src/cellular2D.glsl"
+#include "../thirdparty/psrdnoise/src/psrdnoise3.glsl"
+#if GL_core_profile
+#else
+}
+#endif
+
+#if GL_core_profile
+#else
 namespace HydroPure
 {
 using namespace glm;
@@ -197,7 +210,7 @@ inline float CalcSedimentCapacity(int src, int x, int y)
 	Velocity vel = velocity[src];
 	const float sinusLocalTiltAngle = SinusLocalTiltAngle(src, x, y);
 	const float v = sqrt(vel.x * vel.x + vel.y * vel.y);
-	float capacity = Kc * sinusLocalTiltAngle * v;
+	float capacity = Kc * (sinusLocalTiltAngle + v); // * water[src];
 	return clamp(capacity, minimumSedimentCapacity, float(1.0));
 }
 

@@ -97,6 +97,7 @@ int main(int argc, char **argv)
 	generatorYScale = args.Float("scaleY", 0.001f, 100.0f, 1.0f);
 	SOFT_LAYER = args.Float("softLayerDepth", 0.0f, 1000.0f, 1.0f);
 	const int maxMeshSize = args.Int("meshSize", 64, 4096, 512);
+	verticalScale = args.Float("scaleYrendering", 0.000001, 1000000, verticalScale * 100.0) * 0.01;
 	
 	if (args.Bool("help")) {
 		args.PrintHelp();
@@ -219,8 +220,8 @@ int main(int argc, char **argv)
 	while (!glfwWindowShouldClose(gl::openGL.window)) {
 		
 		++frames;
-		if (frames % 50 == 0) {
-			auto now = std::chrono::steady_clock::now();
+		const auto now = std::chrono::steady_clock::now();
+		if ((now - beg) > std::chrono::seconds(5)) {
 			auto dt = now - beg;
 			auto ns = dt.count();
 			auto sec = ns / 1'000'000'000.0;
@@ -246,6 +247,10 @@ int main(int argc, char **argv)
 		}
 		if (gl::openGL.WasKeyPressed('P')) {
 			disableSimulation = !disableSimulation;
+		}
+		
+		if (disableRender) {
+			gl::Finish();
 		}
 
 		{
@@ -339,16 +344,11 @@ int main(int argc, char **argv)
 			std::this_thread::sleep_for(std::chrono::milliseconds(3));
 		}
 
-		if (disableRender) {
-			gl::openGL.PrintErrors();
-			gl::openGL.ClearErrors();
-		} else {
+		if (!disableRender) {
 			gl::openGL.SwapBuffer();
-			gl::openGL.PrintErrors();
-			gl::openGL.ClearErrors();
 		}
-		
 		gl::openGL.PrintErrors();
+		gl::openGL.ClearErrors();
 	}
 
 	gl::openGL.Destroy();
@@ -405,21 +405,23 @@ void ThreadFunction()
 					 ++_x) {
 					glm::vec2 p{_x, _y};
 // 					p -= glm::vec2(2000, 1000);
+					/*
 					p *= 0.6f;
 					p += 2700.0f;
 					p *= 0.5f;
+					p.y += 750.f / SCALE;
+					*/
 					
 					
 					glm::vec3 v;
 
-					p.y += 750.f / SCALE;
 
 // 					p.x += (simplex.Fbm(glm::vec2(-p.x / 53 + 100, p.y / 53 - 1000),
-// 									  3, 0.5, 2.3, false, false, 1.0f) -
+// 									  3, 0.5, 2.3, false, false) -
 // 						  0.5) *
 // 						 10;
 // 					p.y += (simplex.Fbm(glm::vec2(+p.x / 53 - 1000, -p.y / 53 + 100),
-// 									  3, 0.5, 2.3, false, false, 1.0f) -
+// 									  3, 0.5, 2.3, false, false) -
 // 						  0.5) *
 // 						 10;
 

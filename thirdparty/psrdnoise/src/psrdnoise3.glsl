@@ -61,7 +61,7 @@
 // #define FASTROTATION
 
 // Permutation polynomial for the hash value
-vec4 psrdnoise_permute(vec4 x)
+inline static vec4 psrdnoise_permute(vec4 x)
 {
 	vec4 xm = mod(x, float(289.0));
 	return mod(((xm * float(34.0)) + float(10.0)) * xm, float(289.0));
@@ -97,7 +97,7 @@ vec4 psrdnoise_permute(vec4 x)
 #define OUT(TYPE) TYPE &
 #endif
 
-float psrdnoise(vec3 x, vec3 period, float alpha, OUT(vec3) gradient)
+inline static float psrdnoise(vec3 x, vec3 period, float alpha, OUT(vec3) gradient)
 {
 
 #ifndef PERLINGRID

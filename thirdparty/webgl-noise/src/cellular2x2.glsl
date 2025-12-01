@@ -13,16 +13,16 @@
 // F2 is often wrong and has sharp discontinuities.
 // If you need a smooth F2, use the slower 3x3 version.
 // F1 is sometimes wrong, too, but OK for most purposes.
-vec2 cellular2x2(vec2 P) {
-#define K 0.142857142857 // 1/7
-#define K2 0.0714285714285 // K/2
-#define jitter 0.8 // jitter 1.0 makes F1 wrong more often
+static vec2 cellular2x2(vec2 P) {
+	const float K = float(0.142857142857); // 1/7
+	const float K2 = float(0.0714285714285); // K/2
+	const float jitter = float(0.8); // jitter float(1.0) makes F1 wrong more often
 	vec2 Pi = mod289(floor(P));
  	vec2 Pf = fract(P);
-	vec4 Pfx = Pf.x + vec4(-0.5, -1.5, -0.5, -1.5);
-	vec4 Pfy = Pf.y + vec4(-0.5, -0.5, -1.5, -1.5);
-	vec4 p = permute(Pi.x + vec4(0.0, 1.0, 0.0, 1.0));
-	p = permute(p + Pi.y + vec4(0.0, 0.0, 1.0, 1.0));
+	vec4 Pfx = Pf.x + vec4(-float(0.5), -float(1.5), -float(0.5), -float(1.5));
+	vec4 Pfy = Pf.y + vec4(-float(0.5), -float(0.5), -float(1.5), -float(1.5));
+	vec4 p = permute(Pi.x + vec4(float(0.0), float(1.0), float(0.0), float(1.0)));
+	p = permute(p + Pi.y + vec4(float(0.0), float(0.0), float(1.0), float(1.0)));
 	vec4 ox = mod7(p)*K+K2;
 	vec4 oy = mod7(floor(p*K))*K+K2;
 	vec4 dx = Pfx + jitter*ox;
@@ -31,16 +31,19 @@ vec2 cellular2x2(vec2 P) {
 	// Sort out the two smallest distances
 #if 0
 	// Cheat and pick only F1
-	d.xy = min(d.xy, d.zw);
+	vec2(d.x, d.y) = min(vec2(d.x, d.y), vec2(d.z, d.w));
 	d.x = min(d.x, d.y);
 	return vec2(sqrt(d.x)); // F1 duplicated, F2 not computed
 #else
 	// Do it right and find both F1 and F2
-	d.xy = (d.x < d.y) ? d.xy : d.yx; // Swap if smaller
-	d.xz = (d.x < d.z) ? d.xz : d.zx;
-	d.xw = (d.x < d.w) ? d.xw : d.wx;
+	vec2 tmp = (d.x < d.y) ? vec2(d.x, d.y) : vec2(d.y, d.x); // Swap if smaller
+	d.x = tmp.x; d.y = tmp.y;
+	tmp = (d.x < d.z) ? vec2(d.x, d.z) : vec2(d.z, d.x);
+	d.x = tmp.x; d.z = tmp.y;
+	tmp = (d.x < d.w) ? vec2(d.x, d.w) : vec2(d.w, d.x);
+	d.x = tmp.x; d.w = tmp.y;
 	d.y = min(d.y, d.z);
 	d.y = min(d.y, d.w);
-	return sqrt(d.xy);
+	return sqrt(vec2(d.x, d.y));
 #endif
 }

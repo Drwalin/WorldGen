@@ -41,6 +41,7 @@ struct Grid {
 	Flux *flux = nullptr;
 
 	float hardness[2] = {0.003, 0.02};
+// 	float hardness[2] = {0.01, 0.04};
 	// tan(30) ~= 0.577
 	// tan(45) ~= 1
 	// tan(60) ~= 1.732
@@ -55,8 +56,8 @@ struct Grid {
 		float crossSectionalAreaOfPipe;
 	};
 	union {
-		float g = 9.81;
-		float gravity;
+		float g;
+		float gravity = 9.81;
 	};
 	union {
 		float l = 1.0;

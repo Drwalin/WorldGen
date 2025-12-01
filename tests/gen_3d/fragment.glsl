@@ -56,7 +56,7 @@ void main()
 	vec4 colorGrass = vec4(0.1, out_color.x * 0.3 + 0.7, 0.1, 1);
 	vec4 colorWater = vec4(0.1, 0.1, out_color.x * 0.3 + 0.5, 1);
 
-	if (normal.y < 0.9) {
+	if (normal.y < 0.8) {
 		// stone
 		FragColor = colorStone;
 	} else {
@@ -82,7 +82,7 @@ void main()
 			w = sqrt(w);
 			w *= 0.1;
 		}
-		if (w < 0.1) {
+		if (w < 0.05) {
 			discard;
 		}
 		FragColor = mix(FragColor, colorWater, w);

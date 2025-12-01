@@ -4,7 +4,7 @@
 #include <cstring>
 
 #include <string>
-#include <set>
+#include <map>
 
 struct ArgumentParser {
 	int argc;
@@ -18,7 +18,7 @@ struct ArgumentParser {
 	bool Bool(std::string name)
 	{
 		if (args.contains(name) == false) {
-			args.insert(name);
+			args[name] = "(bool)";
 		}
 		for (int i=argc-1; i>0; --i) {
 			if (std::string(argv[i]) == ("-" + name)) {
@@ -40,7 +40,7 @@ struct ArgumentParser {
 	std::string String(std::string name)
 	{
 		if (args.contains(name) == false) {
-			args.insert(name);
+			args[name] = "(string)";
 		}
 		for (int i=argc-1; i>0; --i) {
 			if (std::string(argv[i]).starts_with("-" + name + "=")) {
@@ -52,12 +52,19 @@ struct ArgumentParser {
 	
 	int Int(std::string name)
 	{
-		return atoi(String(name).c_str());
+		std::string s = String(name);
+		int v = atoi(s.c_str());
+		if (s == "") {
+			v = 0.0f;
+		}
+		args[name] = "(floatwint)";
+		return v;
 	}
 	
 	int Int(std::string name, int min, int max)
 	{
 		int v = Int(name);
+		args[name] = "(int) <"+std::to_string(min)+";"+std::to_string(max)+">";
 		v = v > min ? v : min;
 		v = v < max ? v : max;
 		return v;
@@ -70,6 +77,7 @@ struct ArgumentParser {
 		if (s == "") {
 			v = defaultValue;
 		}
+		args[name] = "(int) <"+std::to_string(min)+";"+std::to_string(max)+"> ~(" + std::to_string(defaultValue) + ")";
 		v = v > min ? v : min;
 		v = v < max ? v : max;
 		return v;
@@ -77,12 +85,19 @@ struct ArgumentParser {
 	
 	int Float(std::string name)
 	{
-		return atof(String(name).c_str());
+		std::string s = String(name);
+		float v = atof(s.c_str());
+		if (s == "") {
+			v = 0.0f;
+		}
+		args[name] = "(float)";
+		return v;
 	}
 	
 	int Float(std::string name, float min, float max)
 	{
-		float v = Int(name);
+		float v = Float(name);
+		args[name] = "(float) <"+std::to_string(min)+";"+std::to_string(max)+">";
 		v = v > min ? v : min;
 		v = v < max ? v : max;
 		return v;
@@ -95,6 +110,7 @@ struct ArgumentParser {
 		if (s == "") {
 			v = defaultValue;
 		}
+		args[name] = "(float) <"+std::to_string(min)+";"+std::to_string(max)+"> ~(" + std::to_string(defaultValue) + ")";
 		v = v > min ? v : min;
 		v = v < max ? v : max;
 		return v;
@@ -104,12 +120,12 @@ struct ArgumentParser {
 	{
 		printf("Available program arguments:\n");
 		for (auto c : args) {
-			printf("   -%s\n", c.c_str());
+			printf("   -%s : %s\n", c.first.c_str(), c.second.c_str());
 		}
 		printf("\n");
 		fflush(stdout);
 	}
 	
 private:
-	std::set<std::string> args;
+	std::map<std::string, std::string> args;
 };

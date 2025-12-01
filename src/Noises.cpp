@@ -19,6 +19,8 @@
 // https://www.youtube.com/c/InigoQuilez
 // https://iquilezles.org/
 
+#include <random>
+
 #include <glm/matrix.hpp>
 
 #include "../include/worldgen/Hash.hpp"
@@ -28,8 +30,9 @@
 namespace glsl_noise
 {
 using namespace glm;
+#include "../thirdparty/webgl-noise/src/classicnoise2D.glsl"
+#include "../thirdparty/webgl-noise/src/cellular2D.glsl"
 #include "../thirdparty/webgl-noise/src/noise4D.glsl"
-#include "../thirdparty/webgl-noise/src/psrdnoise2D.glsl"
 #include "../thirdparty/psrdnoise/src/psrdnoise2.glsl"
 #include "../thirdparty/psrdnoise/src/psrdnoise3.glsl"
 } // namespace glsl_noise
@@ -65,20 +68,18 @@ static float LWeight(float x)
 	}
 }
 
-float Lanczos(glm::vec2 texCoord, int seed)
+float Lanczos(glm::vec2 texCoord, float values[5][5])
 {
 	glm::vec2 imgCoord = texCoord;
 	glm::vec2 samplePos = floor(imgCoord - 0.5f) + 0.5f;
 	glm::vec2 interpFactor = imgCoord - samplePos;
-
 	float nSum = 0;
 	float fX, fY;
-
 	for (int m = -2; m <= 3; m++) {
 		fX = LWeight(float(m) - interpFactor.x);
 		float vecCooef1 = fX;
 		for (int n = -2; n <= 3; n++) {
-			float vecData = hx::Hash(samplePos + glm::vec2(m, n), seed);
+			float vecData = values[m+2][n+2];
 			fY = LWeight(float(n) - interpFactor.y);
 			float vecCoeef2 = fY;
 			nSum += vecData * vecCoeef2 * vecCooef1;
@@ -87,393 +88,96 @@ float Lanczos(glm::vec2 texCoord, int seed)
 	return nSum;
 }
 
+float Lanczos(glm::vec2 texCoord, int seed)
+{
+	glm::vec2 imgCoord = texCoord;
+	glm::vec2 samplePos = floor(imgCoord - 0.5f) + 0.5f;
+
+	float values[5][5];
+	for (int m = -2; m <= 3; m++) {
+		for (int n = -2; n <= 3; n++) {
+			values[m+2][n+2] = hx::Hash(samplePos + glm::vec2(m, n), seed);
+		}
+	}
+	return Lanczos(texCoord, values);
+}
+
 static inline float CubicFactor(float f)
 {
 	float f2 = f * f;
 	return -2 * f * f2 + 3 * f2;
 }
 
+/*
 static inline float Cubic(float a, float b, float f)
 {
 	f = CubicFactor(f);
 	return a * (1 - f) + b * f;
 }
-
-/*
-float _Noise::NoiseV(glm::vec2 uv, int seed)
-{
-	// 	return Lanczos(uv, seed);
-
-	glm::vec2 u = glm::floor(uv);
-	glm::vec2 f = glm::fract(uv);
-	float a = hx::Hash(u, seed);
-	float b = hx::Hash(u + glm::vec2(1.0, 0.0), seed);
-	float c = hx::Hash(u + glm::vec2(0.0, 1.0), seed);
-	float d = hx::Hash(u + glm::vec2(1.0, 1.0), seed);
-	return Cubic(Cubic(a, b, f.x), Cubic(c, d, f.x), f.y);
-}
-
-static inline float CubicDerivative(float f) { return f * (-6 * f + 6); }
-
-glm::vec3 _Noise::NoiseVG(glm::vec2 uv, int seed)
-{
-	glm::vec2 u = glm::floor(uv);
-	glm::vec2 f = glm::fract(uv);
-	float a = hx::Hash(u, seed);
-	float b = hx::Hash(u + glm::vec2(1.0, 0.0), seed);
-	float c = hx::Hash(u + glm::vec2(0.0, 1.0), seed);
-	float d = hx::Hash(u + glm::vec2(1.0, 1.0), seed);
-
-	float fx = CubicFactor(f.x);
-	float fy = CubicFactor(f.y);
-
-	float h = Cubic(Cubic(a, b, f.x), Cubic(c, d, f.x), f.y);
-
-	float ffx = CubicDerivative(f.x);
-	float ffy = CubicDerivative(f.y);
-
-	// 	std::swap(a,b);
-	// 	std::swap(c,d);
-
-	// 	float dx = (b - 1) * ffx * (1 - fy) + (d - c) * ffx * fy;
-	// 	float dy = ((c - a) + (d - b + a - c) * fx) * ffy;
-
-	float dx = ffx * ((a - b) - fy * (a - b - c + d));
-	float dy = ffy * (a + c - (a - b + c - d) * fx);
-	return {h, dx, dy};
-}
-
-// 0: cubic
-// 1: quintic
-#define INTERPOLANT 0
-
-// return value noise (in x) and its derivatives (in yzw)
-float _Noise::NoiseDV(glm::vec3 x)
-{
-	glm::ivec3 i = glm::ivec3(floor(x));
-	glm::vec3 w = glm::fract(x);
-
-#if INTERPOLANT == 1
-	// quintic interpolation
-	glm::vec3 u = w * w * w * (w * (w * 6.0f - 15.0f) + 10.0f);
-	glm::vec3 du = 30.0f * w * w * (w * (w - 2.0f) + 1.0f);
-#else
-	// cubic interpolation
-	glm::vec3 u = w * w * (3.0f - 2.0f * w);
-#endif
-
-	float a = hx::Hash(i + glm::ivec3(0, 0, 0));
-	float b = hx::Hash(i + glm::ivec3(1, 0, 0));
-	float c = hx::Hash(i + glm::ivec3(0, 1, 0));
-	float d = hx::Hash(i + glm::ivec3(1, 1, 0));
-	float e = hx::Hash(i + glm::ivec3(0, 0, 1));
-	float f = hx::Hash(i + glm::ivec3(1, 0, 1));
-	float g = hx::Hash(i + glm::ivec3(0, 1, 1));
-	float h = hx::Hash(i + glm::ivec3(1, 1, 1));
-
-	float k0 = a;
-	float k1 = b - a;
-	float k2 = c - a;
-	float k3 = e - a;
-	float k4 = a - b - c + d;
-	float k5 = a - c - e + g;
-	float k6 = a - b - e + f;
-	float k7 = -a + b + c - d + e - f - g + h;
-
-	return k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y +
-		   k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z;
-}
-
-// return value noise (in x) and its derivatives (in yzw)
-glm::vec4 _Noise::NoiseD(glm::vec3 x)
-{
-	glm::ivec3 i = glm::ivec3(floor(x));
-	glm::vec3 w = glm::fract(x);
-
-#if INTERPOLANT == 1
-	// quintic interpolation
-	glm::vec3 u = w * w * w * (w * (w * 6.0f - 15.0f) + 10.0f);
-	glm::vec3 du = 30.0f * w * w * (w * (w - 2.0f) + 1.0f);
-#else
-	// cubic interpolation
-	glm::vec3 u = w * w * (3.0f - 2.0f * w);
-	glm::vec3 du = 6.0f * w * (1.0f - w);
-#endif
-
-	float a = hx::Hash(i + glm::ivec3(0, 0, 0));
-	float b = hx::Hash(i + glm::ivec3(1, 0, 0));
-	float c = hx::Hash(i + glm::ivec3(0, 1, 0));
-	float d = hx::Hash(i + glm::ivec3(1, 1, 0));
-	float e = hx::Hash(i + glm::ivec3(0, 0, 1));
-	float f = hx::Hash(i + glm::ivec3(1, 0, 1));
-	float g = hx::Hash(i + glm::ivec3(0, 1, 1));
-	float h = hx::Hash(i + glm::ivec3(1, 1, 1));
-
-	float k0 = a;
-	float k1 = b - a;
-	float k2 = c - a;
-	float k3 = e - a;
-	float k4 = a - b - c + d;
-	float k5 = a - c - e + g;
-	float k6 = a - b - e + f;
-	float k7 = -a + b + c - d + e - f - g + h;
-
-	return glm::vec4(k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y +
-						 k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z,
-					 du * glm::vec3(k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
-									k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
-									k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y));
-}
-
-glm::vec4 _Noise::FractalBrownianMotion(glm::vec3 x, int octaves)
-{
-	float f = 1.98; // could be 2.0f
-	float s = 0.49; // could be 0.5
-	float a = 0.0f;
-	float b = 0.5;
-	glm::vec3 d = glm::vec3(0.0f, 0.0f, 0.0f);
-	glm::mat3 m =
-		glm::mat3(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	for (int i = 0; i < octaves; i++) {
-		glm::vec4 n = NoiseD(x);
-		a += b * n.x;						   // accumulate values
-		d += b * m * glm::vec3(n.y, n.z, n.w); // accumulate derivatives
-		b *= s;
-		x = f * m * x; // *3;
-		m = f * m * m; // *3;
-	}
-	return glm::vec4(a, d);
-}
-
-float _Noise::fbm(glm::vec3 x, float H, int octaves)
-{
-	float G = exp2(-H);
-	float f = 1.0;
-	float a = 1.0;
-	float t = 0.0;
-	for (int i = 0; i < octaves; i++) {
-		t += a * _Noise::NoiseD(f * x).x;
-		f *= 2.0;
-		a *= G;
-	}
-	return t;
-}
-
-float _Noise::Terrain(glm::vec3 _p)
-{
-	constexpr glm::mat2 m = glm::mat2(0.8, -0.6, 0.6, 0.8);
-	glm::vec2 p = {_p.x, _p.z};
-	float a = 0.0f;
-	float b = 1.0f;
-	glm::vec2 d = glm::vec2(0.0f, 0.0f);
-	for (int i = 0; i < 8; i++) {
-		glm::vec3 n = NoiseD(glm::vec3(p.x, 0, p.y));
-		d += glm::vec2(n.y, n.z);
-		a += b * n.x / (1.0f + dot(d, d));
-		b *= 0.5f;
-		p = m * p * 2.0f;
-	}
-	return a;
-}
-
-float _Noise::NoiseDV(glm::vec2 x)
-{
-	glm::vec2 i = floor(x);
-	glm::vec2 f = fract(x);
-
-	glm::vec2 u = f * f * f * (f * (f * 6.0f - 15.0f) + 10.0f);
-
-	glm::vec2 ga = hx::Hash2(glm::vec3(i + glm::vec2(0.0f, 0.0f), 0.0f));
-	glm::vec2 gb = hx::Hash2(glm::vec3(i + glm::vec2(1.0f, 0.0f), 0.0f));
-	glm::vec2 gc = hx::Hash2(glm::vec3(i + glm::vec2(0.0f, 1.0f), 0.0f));
-	glm::vec2 gd = hx::Hash2(glm::vec3(i + glm::vec2(1.0f, 1.0f), 0.0f));
-
-	float va = dot(ga, f - glm::vec2(0.0f, 0.0f));
-	float vb = dot(gb, f - glm::vec2(1.0f, 0.0f));
-	float vc = dot(gc, f - glm::vec2(0.0f, 1.0f));
-	float vd = dot(gd, f - glm::vec2(1.0f, 1.0f));
-
-	return va + u.x * (vb - va) + u.y * (vc - va) +
-		   u.x * u.y * (va - vb - vc + vd);
-}
-
-// return value noise (in x) and its derivatives (in yzw)
-glm::vec3 _Noise::NoiseD(glm::vec2 x)
-{
-	glm::vec2 i = floor(x);
-	glm::vec2 f = fract(x);
-
-	glm::vec2 u = f * f * f * (f * (f * 6.0f - 15.0f) + 10.0f);
-	glm::vec2 du = 30.0f * f * f * (f * (f - 2.0f) + 1.0f);
-
-	glm::vec2 ga = hx::Hash2(glm::vec3(i + glm::vec2(0.0f, 0.0f), 0.0f));
-	glm::vec2 gb = hx::Hash2(glm::vec3(i + glm::vec2(1.0f, 0.0f), 0.0f));
-	glm::vec2 gc = hx::Hash2(glm::vec3(i + glm::vec2(0.0f, 1.0f), 0.0f));
-	glm::vec2 gd = hx::Hash2(glm::vec3(i + glm::vec2(1.0f, 1.0f), 0.0f));
-
-	float va = dot(ga, f - glm::vec2(0.0f, 0.0f));
-	float vb = dot(gb, f - glm::vec2(1.0f, 0.0f));
-	float vc = dot(gc, f - glm::vec2(0.0f, 1.0f));
-	float vd = dot(gd, f - glm::vec2(1.0f, 1.0f));
-
-	return glm::vec3(va + u.x * (vb - va) + u.y * (vc - va) +
-						 u.x * u.y * (va - vb - vc + vd), // value
-					 ga + u.x * (gb - ga) + u.y * (gc - ga) +
-						 u.x * u.y * (ga - gb - gc + gd) + // derivatives
-						 du * ((glm::vec2(u.y, u.x)) * (va - vb - vc + vd) +
-							   glm::vec2(vb, vc) - va));
-}
-
-glm::vec3 _Noise::FractalBrownianMotion(glm::vec2 x, int octaves)
-{
-	float f = 1.98; // could be 2.0f
-	float s = 0.49; // could be 0.5
-	float a = 0.0f;
-	float b = 0.5;
-	glm::vec3 d = glm::vec3(0.0f, 0.0f, 0.0f);
-	glm::mat3 m =
-		glm::mat3(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	for (int i = 0; i < octaves; i++) {
-		float h0 = NoiseV(x);
-		float h1 = NoiseV(x + glm::vec2(0.0625f, 0));
-		float h2 = NoiseV(x + glm::vec2(0, 0.0625f));
-		glm::vec3 n{h0, -(h1 - h0) / 0.0625f, -(h2 - h0) / 0.0625f};
-
-		a += b * n.x;					 // accumulate values
-		d += b * glm::vec3(n.y, n.z, 0); // accumulate derivatives
-		b *= s;
-		x = f * m * glm::vec3(x, 0); // * 3;
-		m = f * m * m; // * 3;
-	}
-	return glm::vec3(a, d.x, d.y);
-}
-
-float _Noise::fbm(glm::vec2 x, float H, int octaves)
-{
-	return FractalBrownianMotion(x, octaves).x;
-
-	float G = exp2(-H);
-	float f = 1.0;
-	float a = 1.0;
-	float t = 0.0;
-	for (int i = 0; i < octaves; i++) {
-		t += a * _Noise::NoiseV(f * x);
-		f *= 2.0;
-		a *= G;
-	}
-	return t;
-}
-
-float _Noise::Ridges(glm::vec2 x, float horizontalScale, float steep,
-					 float octaves, float gradientInfluence, int seed)
-{
-	float h = 0;
-	float f = 1;
-	glm::vec2 grad = {0, 0};
-
-	float div = 1.0f;
-
-	for (int i = 0; i < octaves; i++) {
-		float h0 = NoiseV(x, i ^ seed);
-		float h1 = NoiseV(x + glm::vec2(0.0625f, 0), i ^ seed);
-		float h2 = NoiseV(x + glm::vec2(0, 0.0625f), i ^ seed);
-		grad += glm::vec2{(h1 - h0) / (0.0625f * horizontalScale),
-						  (h2 - h0) / (0.0625f * horizontalScale)};
-
-		float gf = glm::length(grad);
-		gf = exp(-gf * gf);
-		// 		gf = 1.0f / (1.0f + gf);
-		gf = gf * gradientInfluence + 1 - gradientInfluence;
-
-		h += h0 * gf * f;
-		f *= steep;
-
-		div += f;
-		x *= 2.3;
-	}
-	return h / div;
-}
-
-float _Noise::Ridges2(glm::vec2 x, float horizontalScale, float steep,
-					  float octaves, float gradientInfluence, int seed)
-{
-	float h = 0;
-	float f = 1;
-	glm::vec2 grad = {0, 0};
-
-	float div = 1.0f;
-
-	for (int i = 0; i < octaves; i++) {
-		glm::vec3 v = NoiseVG(x, i ^ seed);
-		v.y /= horizontalScale;
-		v.z /= horizontalScale;
-
-		grad.x += v.y;
-		grad.y += v.z;
-		float gf = glm::length(grad);
-		gf = exp(-gf * gf);
-		// 		gf = 1.0f / (1.0f + gf);
-		gf = gf * gradientInfluence + 1 - gradientInfluence;
-
-		h += v.y * gf * f;
-		f *= steep;
-
-		div += f;
-		x *= 2.3;
-	}
-	return h / div;
-}
-
-float _Noise::Terrain(glm::vec2 p, float horizontalScale)
-{
-	float hr = Ridges2(p, horizontalScale, 0.8, 3, 0.99, 14321);
-	float hr2 =
-		Ridges2(p * 6.0f, horizontalScale * 6.0f, 0.8, 5, 0.99, 1423342321);
-	hr = (hr + hr2 * 0.3) / 1.3;
-	float h = Ridges2(p * 90.0f, horizontalScale * 90, 0.6, 3, 0, 32131);
-	return h * 0.02 + hr * 0.98;
-}
 */
 
-OpenSimplex2F::OpenSimplexEnv *SimplexNoise::ose =
-	OpenSimplex2F::initOpenSimplex();
+
+// OpenSimplex2F::OpenSimplexEnv *SimplexNoise::ose =
+// 	OpenSimplex2F::initOpenSimplex();
 
 SimplexNoise::SimplexNoise(uint64_t seed)
 {
-	osg = nullptr;
+// 	osg = nullptr;
 	Init(seed);
 }
 
-SimplexNoise::~SimplexNoise() { OpenSimplex2F::FreeOSG(osg); }
+SimplexNoise::~SimplexNoise() {
+	//OpenSimplex2F::FreeOSG(osg);
+}
 
 void SimplexNoise::Init(uint64_t seed)
 {
-	if (osg) {
-		OpenSimplex2F::FreeOSG(osg);
+	this->seed = seed;
+// 	if (osg) {
+// 		OpenSimplex2F::FreeOSG(osg);
+// 	}
+// 	osg = OpenSimplex2F::newOpenSimplexGradients(ose, 822199);
+	std::mt19937_64 mt(seed);
+	auto gen = [&mt](float min, float max) -> float {
+		return std::uniform_real_distribution<float>(min, max)(mt);
+	};
+	for (int i=0; i<AMOUNT_SEEDED_VALS; ++i) {
+		seedi[i] = mt();
+		seedf[i] = gen(0, 1);
+		seedrad[i] = gen(0, M_PI*2);
+		float rad = gen(0, M_PI*2);
+		float s = sin(rad);
+		float c = cos(rad);
+		seedrot[i] = glm::mat2(c, -s, s, c);
 	}
-	osg = OpenSimplex2F::newOpenSimplexGradients(ose, 822199);
 }
 
 float SimplexNoise::Noise(glm::vec2 p)
 {
 	glm::vec2 grad;
 	return (glsl_noise::psrdnoise(p, {0.0f, 0.0f}, 0.0f, grad) + 1.0f) * 0.5f;
+	/*
 	return (OpenSimplex2F::noise2(ose, osg, p.x, p.y) + 1.0) * 0.5;
+	*/
 }
 
 float SimplexNoise::Noise(glm::vec3 p)
 {
 	glm::vec3 grad;
-	return (glsl_noise::psrdnoise(p, {0.0f, 0.0f, 0.0f}, 0.0f, grad) + 1.0f) *
+	return (glsl_noise::psrdnoise(p, glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, grad) + 1.0f) *
 		   0.5f;
+	/*
 	return (OpenSimplex2F::noise3_Classic(ose, osg, p.x, p.y, p.z) + 1.0) * 0.5;
+	*/
 }
 
 float SimplexNoise::Noise(glm::vec4 p)
 {
 	return (glsl_noise::snoise(p) + 1.0f) * 0.5f;
+	/*
 	return (OpenSimplex2F::noise4_Classic(ose, osg, p.x, p.y, p.z, p.w) + 1.0) *
 		   0.5;
+	*/
 }
 
 float SimplexNoise::Noise2(glm::vec2 p)
@@ -493,50 +197,48 @@ float SimplexNoise::Noise2(glm::vec4 p)
 }
 
 float SimplexNoise::Fbm(glm::vec2 p, int octaves, float attenuation,
-						float coordMultiplier, bool useGrad, bool useNoise2,
-						float verticalScale)
+						float coordMultiplier, bool useGrad, bool useNoise2)
 {
-	p *= 9.0f;
-	float (SimplexNoise::*noise)(glm::vec2) = &SimplexNoise::Noise;
-	if (useNoise2) {
-		noise = &SimplexNoise::Noise2;
-	}
+	p *= 5.0f;
+// 	float (SimplexNoise::*noise)(glm::vec2) = &SimplexNoise::Noise;
+// 	if (useNoise2) {
+// 		noise = &SimplexNoise::Noise2;
+// 	}
 
 	glm::vec2 g{0, 0};
-	float dx = 0.001;
+// 	float dx = 0.001;
 
 	float h = 0;
 	float a = 1;
 	float sum = 0;
 	for (int i = 0; i < octaves; ++i) {
-		float h0, h1, h2;
+		float h0;//, h1, h2;
 
-		glm::vec2 grad;
-		h0 = (glsl_noise::psrdnoise(p, {0.0f, 0.0f}, 0.0f, grad) + 1.0f) *
-			 0.5f * a;
+		glm::vec2 grad{0,0};
+// 		h0 = (glsl_noise::perlin_cnoise(p) * 0.5 + 0.5) * a;
+		h0 = (glsl_noise::psrdnoise(seedrot[i] * p, {0.0f, 0.0f}, i, grad) * 0.5 + 0.5) * a;
 		/*
-		h0 = (this->*noise)(p)*a * verticalScale;
+		h0 = (this->*noise)(p)*a;
 		*/
 		if (useGrad) {
 			/*
-			h1 = (this->*noise)(p + glm::vec2{dx, 0.0f}) * a * verticalScale;
-			h2 = (this->*noise)(p + glm::vec2{0.0f, dx}) * a * verticalScale;
+			h1 = (this->*noise)(p + glm::vec2{dx, 0.0f}) * a;
+			h2 = (this->*noise)(p + glm::vec2{0.0f, dx}) * a;
 			g += (glm::vec2{h1, h2} - h0) / dx;
 			*/
 			g += grad * a;
-			h += h0 / (1.0f + glm::dot(g, g));
-		} else {
-			h += h0;
+			h0 /= (1.0f + glm::dot(g, g));
 		}
+		h += h0;
 
 		sum += a;
 		p *= coordMultiplier;
 		a *= attenuation;
 	}
-	return h * verticalScale / sum;
+	return h / sum;
 }
 
-float NoiseRidges(glm::vec2 st)
+float SimplexNoise::NoiseRidges(glm::vec2 st)
 {
 	const float nscale = 5.0;
 	glm::vec2 v = nscale * (st - 0.5f);
@@ -549,31 +251,58 @@ float NoiseRidges(glm::vec2 st)
 	float w = 1.0;
 	float s = 1.0;
 	gsum = glm::vec2(0.0);
-	for (float i = 0.0; i < 8.0; i++) {
+	float sum = 0.0;
+	for (int i = 0; i < 12; i++) {
 		n +=
-			w * glsl_noise::psrdnoise(s * v + warp * gsum, s * p, s * alpha, g);
+			w * (glsl_noise::psrdnoise(seedrot[i+17] * (s * v + warp * gsum), s * p, s * alpha, g) * 0.5 + 0.5);
 		gsum += w * g;
 		w *= 0.5;
 		s *= 2.0;
+		sum += w;
 	}
 
-	return 1.0f - n * 0.5f;
+	return 1.0f - n / sum;
+}
+
+float RecCell(glm::vec2 p, int octaves, float attenuation,
+						float coordMultiplier)
+{
+	p *= 5.0f;
+	float h = 0;
+	float a = 1;
+	float sum = 0;
+	for (int i = 0; i < octaves; ++i) {
+		float h0;
+		h0 = (glsl_noise::cellular(p).x * 0.5 + 0.5) * a;
+		h += h0;
+
+		sum += a;
+		p *= coordMultiplier;
+		a *= attenuation;
+	}
+	return h / sum;
 }
 
 float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 {
-// 	return NoiseRidges(p*0.5f);
+	p /= 2.0f;
+// 	return RecCell(p, 14, 0.53, 1.7);
+// 	return glsl_noise::cellular(p).x;
 // 	glm::vec2 grad;
+// 	return NoiseRidges(p / 15.0f);
 // 	return glsl_noise::psrdnoise(p * 30.0f, {0.0f, 0.0f}, 0.0f, grad) * 0.5f + 0.5f;
-// 	return Fbm(p, 20, 5.0/7.0, 1.3, false, false, 0.4 + 0.6 * Noise(p * 0.1f + 123.f));
+// 	return Fbm(p, 8, 3.0/7.0, 2.3, false, false) * (0.4 + 0.6 * Noise(p * 0.1f + 123.f));
 	int octaves = 14;
 	bool useTwo = false;
-	float biome = Noise(-p * 0.2f - 321.f);
-	float scale = Noise(p * 0.4f + 123.f);
+	float biome = Noise(seedrot[33] * -p * 0.2f * 2.0f - 321.f);
+	float scale = Noise(seedrot[34] * p * 0.4f + 123.f);
 	float mountains =
-		Fbm(p, octaves, 0.53, 2.3, true, useTwo, scale * 0.6 + 0.4);
-	float plains = Fbm(p * 0.3f - 100.0f, octaves, 0.5, 2.3, false, useTwo,
-					   scale * 0.8 + 0.2);
+		(
+		NoiseRidges(p / 2.0f) * (scale * 0.6 + 0.4)
+		+ RecCell(p, 14, 0.53, 1.7) * 3) * 0.25;
+// 		Fbm(p, octaves, 0.43, 2.3, false, useTwo) * (scale * 0.6 + 0.4);
+	float plains = Fbm(p * 0.3f - 100.0f, octaves, 0.5, 2.3, false, useTwo) *
+					   (scale * 0.8 + 0.2);
 	float h;
 	if (biome < 0.25) {
 		h = plains;
@@ -585,7 +314,6 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 		h = plains + mountains;
 	}
 	return h * 0.5f;
-	;
 }
 
 } // namespace wg

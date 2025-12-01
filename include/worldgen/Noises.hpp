@@ -23,37 +23,13 @@
 
 #include <glm/common.hpp>
 #include <glm/fwd.hpp>
+#include <glm/vec2.hpp>
+#include <glm/mat2x2.hpp>
 
-#include "../../thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp"
+// #include "../../thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp"
 
 namespace wg
 {
-/*
-class _Noise
-{
-public:
-	static float NoiseV(glm::vec2 x, int seed = 0);
-	static glm::vec3 NoiseVG(glm::vec2 x, int seed = 0);
-	
-	static float NoiseDV(glm::vec3 x);
-	static float NoiseDV(glm::vec2 x);
-	
-	static glm::vec4 NoiseD(glm::vec3 x);
-	static glm::vec4 FractalBrownianMotion(glm::vec3 x, int octaves);
-	static float Terrain(glm::vec3 p);
-	static float fbm(glm::vec3 x, float H, int octaves);
-	
-	static glm::vec3 NoiseD(glm::vec2 x);
-	static glm::vec3 FractalBrownianMotion(glm::vec2 x, int octaves);
-	static float fbm(glm::vec2 x, float H, int octaves);
-	
-	static float Ridges(glm::vec2 x, float horizontalScale, float steep, float octaves, float gradientInfluence, int seed);
-	static float Ridges2(glm::vec2 x, float horizontalScale, float steep, float octaves, float gradientInfluence, int seed);
-	
-	static float Terrain(glm::vec2 p, float horizontalScale);
-};
-*/
-
 class SimplexNoise
 {
 public:
@@ -70,14 +46,19 @@ public:
 	float Noise2(glm::vec3 p);
 	float Noise2(glm::vec4 p);
 	
-	float Fbm(glm::vec2 p, int octaves, float attenuation, float coordMultiplier, bool useGrad, bool useNoise2, float verticalScale);
+	float NoiseRidges(glm::vec2 st);
+	float Fbm(glm::vec2 p, int octaves, float attenuation, float coordMultiplier, bool useGrad, bool useNoise2);
 	
 	float Terrain(glm::vec2 p, float verticalScale);
 	
 private:
-	static OpenSimplex2F::OpenSimplexEnv *ose;
-	OpenSimplex2F::OpenSimplexGradients *osg = nullptr;
+// 	static OpenSimplex2F::OpenSimplexEnv *ose;
+// 	OpenSimplex2F::OpenSimplexGradients *osg = nullptr;
 	uint64_t seed;
-	float seedf[16];
+	static constexpr int AMOUNT_SEEDED_VALS = 64;
+	float seedf[AMOUNT_SEEDED_VALS];
+	float seedrad[AMOUNT_SEEDED_VALS];
+	uint64_t seedi[AMOUNT_SEEDED_VALS];
+	glm::mat2 seedrot[AMOUNT_SEEDED_VALS];
 };
 } // namespace wg

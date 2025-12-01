@@ -89,14 +89,14 @@ void Grid::Init(int width, int height, bool useGpu)
 Grid::Grid()
 {
 	width = height = 0;
-	dt = 0.03;
+	dt = 0.01;
 	crossSectionalAreaOfPipe = .6;
 	gravity = 9.81;
 	tileDimensionSize = 1;
 
 	depositionConstant = 0.03;
 	sedimentCapacityConstant = 0.03;
-	minimumSedimentCapacity = 0.03;
+	minimumSedimentCapacity = 0.01;
 }
 
 Grid::~Grid()
