@@ -72,8 +72,6 @@ void main()
 		}
 	}
 
-	float waterVar = 0.0;
-
 	if (useWater == 1) {
 		float w = clamp(water, 0.0, 1.0);
 		if (w < 0.25) {
@@ -85,8 +83,8 @@ void main()
 		if (w < 0.05) {
 			discard;
 		}
-		FragColor = mix(FragColor, colorWater, w);
-		waterVar = 1.0;
+		FragColor = colorWater;//mix(FragColor, colorWater, w);
+		FragColor.w = 0.7;
 	} else {
 		float w = clamp(water, 0.0, 1.0);
 		w = sqrt(w);
@@ -95,6 +93,5 @@ void main()
 
 	float light = dot(lightNormal, normalize(vec3(-0.6, -0.1, -0.5)));
 	light = light * 0.5 + 0.5;
-
-	FragColor = vec4(FragColor.xyz * light, 1.0 - waterVar * 0.3);
+	FragColor.xyz = FragColor.xyz * light;
 }

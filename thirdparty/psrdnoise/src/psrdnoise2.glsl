@@ -71,7 +71,7 @@
 #define OUT(TYPE) TYPE &
 #endif
 
-float psrdnoise(vec2 x, vec2 period, float alpha, OUT(vec2) gradient) {
+inline static float psrdnoise(vec2 x, vec2 period, float alpha, OUT(vec2) gradient) {
 
 	// Transform to simplex space (axis-aligned hexagonal grid)
 	vec2 uv = vec2(x.x + x.y*float(0.5), x.y);

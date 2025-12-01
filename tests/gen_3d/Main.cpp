@@ -27,6 +27,8 @@ int width = 512 + 64;
 int height = width;
 int riverSourcesCount = 4;
 
+int gridOffsetX = 0, gridOffsetY = 0;
+
 float generatorYScale = 1.0;
 float SOFT_LAYER = 0.1;
 
@@ -90,6 +92,12 @@ Grid grid;
 
 int main(int argc, char **argv)
 {
+#ifdef WORLDGEN_ENABLE_OPENGLWRAPPER
+	printf("ENABLED WORLDGEN 3D\n");
+#else
+	printf("DISABLED WORLDGEN 3D\n");
+#endif
+	
 	ArgumentParser args(argc, argv);
 	width = args.Int("width", 512+64, 16384, 512+64);
 	height = width;
@@ -98,6 +106,11 @@ int main(int argc, char **argv)
 	SOFT_LAYER = args.Float("softLayerDepth", 0.0f, 1000.0f, 1.0f);
 	const int maxMeshSize = args.Int("meshSize", 64, 4096, 512);
 	verticalScale = args.Float("scaleYrendering", 0.000001, 1000000, verticalScale * 100.0) * 0.01;
+	grid.parallelThreads = args.Int("parallelThreads", 1, 6, 1);
+	useGpu = !args.Bool("disableGpu");
+	noiseHorizontalScale = args.Float("scaleXZ", 1) * noiseHorizontalScale;
+	gridOffsetX = args.Int("gridOffsetX", 0);
+	gridOffsetY = args.Int("gridOffsetY", 0);
 	
 	if (args.Bool("help")) {
 		args.PrintHelp();
@@ -114,8 +127,6 @@ int main(int argc, char **argv)
 	shader.Load("../tests/gen_3d/vertex.glsl", "../tests/gen_3d/geometry.glsl",
 				"../tests/gen_3d/fragment.glsl");
 
-	// TODO: load from argv
-
 	// Generate index data
 	gl::VBO ebo(sizeof(uint32_t), gl::ELEMENT_ARRAY_BUFFER, gl::DYNAMIC_DRAW);
 	ebo.Init();
@@ -125,19 +136,8 @@ int main(int argc, char **argv)
 	
 	gl::Texture heightsTexture, colorsTexture;
 	
-// 	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
-// 	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
-// 	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
-// 	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
-// 	
 	heightsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RG32F);
 	colorsTexture.InitTextureEmpty(width, height, gl::TextureTarget::TEXTURE_2D, gl::TextureSizedInternalFormat::RGBA8);
-	
-// 	heightsTexture.WrapX(gl::TextureWrapParam::CLAMP_TOtEDGE);
-// 	heightsTexture.WrapY(gl::TextureWrapParam::CLAMP_TOtEDGE);
-// 	heightsTexture.MagFilter(gl::TextureMagFilter::MAG_LINEAR);
-// 	heightsTexture.MinFilter(gl::TextureMinFilter::LINEAR);
-// 	
 	colorsTexture.Update2((const void*)vertColors, 0, 0, width, height, 0, gl::TextureDataFormat::RGBA, gl::DataType::UNSIGNED_BYTE);
 	heightsTexture.Update2((const void*)vertHeights, 0, 0, width, height, 0, gl::TextureDataFormat::RG, gl::DataType::FLOAT);
 	
@@ -511,7 +511,7 @@ void HydroErosionIteration()
 						}
 					}
 				}
-				grid.water[t] = 0.1;
+				grid.water[t] = 0.1 * 0;
 			}
 		}
 		if (riverSources.size() > 0) {
@@ -528,7 +528,6 @@ void HydroErosionIteration()
 			grid.gpu.UpdateTemp1(grid.temp1);
 			grid.gpu.UpdateVelocity(grid.velocity);
 			grid.gpu.UpdateFlux(grid.flux);
-			grid.gpu.UpdateRiverSources(riverSources.data(), riverSources.size());
 		}
 	}
 	

@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(WORLDGEN_3D_RENDERER "Build OpenGLWrapper examples" OFF)
+option(USE_OPENGLWRAPPER "Enable OpenGLWrapper" OFF)
+
+if(WORLDGEN_3D_RENDERER)
+	set(USE_OPENGLWRAPPER ON)
+endif()
 
 set(
 	WORLDGEN_OPENGLWRAPPER_DIR
@@ -29,6 +34,9 @@ add_library(WorldGen STATIC
 	thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp
 )
 target_link_libraries(WorldGen OpenGLWrapper)
+if(USE_OPENGLWRAPPER)
+	target_compile_definitions(WorldGen PUBLIC -DWORLDGEN_ENABLE_OPENGLWRAPPER)
+endif()
 
 if(WORLDGEN_3D_RENDERER)
 	add_subdirectory(${WORLDGEN_OPENGLWRAPPER_DIR} ./build/OpenGLWrapper)

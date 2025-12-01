@@ -36,7 +36,7 @@ public:
 		return false;
 	}
 	
-	std::string String(std::string name)
+	std::string String(std::string name, std::string defaultValue)
 	{
 		if (args.contains(name) == false) {
 			args[name] = "(string)";
@@ -46,7 +46,12 @@ public:
 				return argv[i] + strlen(name.c_str()) + 2;
 			}
 		}
-		return "";
+		return defaultValue;
+	}
+	
+	std::string String(std::string name)
+	{
+		return String(name, "");
 	}
 	
 	int Int(std::string name)
@@ -57,6 +62,17 @@ public:
 			v = 0.0f;
 		}
 		args[name] = "(floatwint)";
+		return v;
+	}
+	
+	int Int(std::string name, int defaultValue)
+	{
+		std::string s = String(name);
+		int v = atoi(s.c_str());
+		if (s == "") {
+			v = defaultValue;
+		}
+		args[name] = "(int) ~(" + std::to_string(defaultValue) + ")";
 		return v;
 	}
 	
@@ -71,11 +87,7 @@ public:
 	
 	int Int(std::string name, int min, int max, int defaultValue)
 	{
-		std::string s = String(name);
-		int v = atoi(s.c_str());
-		if (s == "") {
-			v = defaultValue;
-		}
+		int v = Int(name, defaultValue);
 		args[name] = "(int) <"+std::to_string(min)+";"+std::to_string(max)+"> ~(" + std::to_string(defaultValue) + ")";
 		v = v > min ? v : min;
 		v = v < max ? v : max;
@@ -93,6 +105,16 @@ public:
 		return v;
 	}
 	
+	float Float(std::string name, float defaultValue)
+	{
+		std::string s = String(name);
+		float v = atof(s.c_str());
+		if (s == "") {
+			v = defaultValue;
+		}
+		return v;
+	}
+	
 	int Float(std::string name, float min, float max)
 	{
 		float v = Float(name);
@@ -104,11 +126,7 @@ public:
 	
 	float Float(std::string name, float min, float max, float defaultValue)
 	{
-		std::string s = String(name);
-		float v = atof(s.c_str());
-		if (s == "") {
-			v = defaultValue;
-		}
+		float v = Float(name, defaultValue);
 		args[name] = "(float) <"+std::to_string(min)+";"+std::to_string(max)+"> ~(" + std::to_string(defaultValue) + ")";
 		v = v > min ? v : min;
 		v = v < max ? v : max;

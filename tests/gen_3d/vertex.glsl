@@ -84,7 +84,7 @@ void main()
 	float water = heights.y;
 	
 	_in_uv = coord;
-	_in_pos = vec3(x * scale.x, (height + water * float(useWater)) * scale.y, z * scale.z);
+	_in_pos = vec3(x * scale.x, (height + (water - 0.2 * 0) * float(useWater)) * scale.y, z * scale.z);
 	gl_Position = projection * view * model * vec4(_in_pos * renderScaleVec, 1);
 	_in_out_color = color;
 	_in_water = water;

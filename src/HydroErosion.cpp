@@ -46,9 +46,11 @@ void Grid::CallThermalErosion()
 void Grid::CallEvaporation() {
 	if (useGpu) {
 		gpu.CallEvaporation();
+		gpu.CallEvaporationUpdate();
 // 		gpu.vboWater->Copy(gpu.vboTemp1, 0, 0, elements * 4);
 	} else {
 		ForEachSafeBorders(HydroPure::Evaporation);
+		ForEachSafeBorders(HydroPure::EvaporationUpdate);
 // 		memcpy(water, temp1, elements * 4);
 	}
 }
@@ -95,6 +97,7 @@ void Grid::Init(int width, int height, bool useGpu)
 
 Grid::Grid()
 {
+	parallelThreads = std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
 	width = height = 0;
 	dt = 0.03;
 	crossSectionalAreaOfPipe = .6;
@@ -136,6 +139,7 @@ static std::function<void(int X)> jobWorker;
 
 template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 {
+	parallelThreads = std::clamp<int>(parallelThreads, 1, std::thread::hardware_concurrency());
 	static std::function<void()> singleIteration = []() {
 		int X = jobId.fetch_add(1);
 		if (X < jobsTotal.load()) {
@@ -144,9 +148,7 @@ template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 		}
 	};
 	{
-		int threadsCount =
-			std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
-		while (threads.size() < threadsCount) {
+		while (threads.size() < parallelThreads-1) {
 			threads.push_back(std::thread([]() {
 				while (true) {
 					if (jobId.load() < jobsTotal.load()) {
@@ -175,21 +177,19 @@ template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 		jobsDone = 0;
 		jobId = 0;
 		jobsTotal = (width + XDXDX - 1) / XDXDX;
-	}
 
-	if (!parallel) {
+		if (parallel) {
+			while (jobsDone.load() < jobsTotal.load()) {
+				singleIteration();
+			}
+		}
+	} else {
 		for (int X = 0; X < width; X += XDXDX) {
 			for (int y = 0; y < height; ++y) {
 				for (int x = X; x < X + XDXDX && x < width; ++x) {
 					func(x, y);
 				}
 			}
-		}
-	}
-
-	if (parallel) {
-		while (jobsDone.load() < jobsTotal.load()) {
-			singleIteration();
 		}
 	}
 

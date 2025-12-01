@@ -7,6 +7,13 @@
 #include "../../../OpenGLWrapper/include/openglwrapper/Shader.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
 
+namespace gl
+{
+	class VBO;
+	class Shader;
+	class TExture;
+}
+
 /*
  * Angles of repose:
  *    dry sand: 34*
@@ -19,6 +26,7 @@
 #include "HydroErosionStructs.h"
 
 struct Grid {
+	int parallelThreads = 1;
 	bool useGpu;
 	bool useWater = true;
 	bool useThermalErosion = true;
@@ -104,25 +112,25 @@ struct Grid {
 	struct GPUCompute {
 		~GPUCompute();
 		
-		gl::Shader shaderCalcOutFlux;
-		gl::Shader shaderUpdateWaterLevelAndVelocity;
-		gl::Shader shaderErosionAndDepositionCalculation;
-		gl::Shader shaderErosionAndDepositionUpdate;
-		gl::Shader shaderSedimentTransportation;
-		gl::Shader shaderSedimentTransportationUpdate;
+		gl::Shader *shaderCalcOutFlux;
+		gl::Shader *shaderUpdateWaterLevelAndVelocity;
+		gl::Shader *shaderErosionAndDepositionCalculation;
+		gl::Shader *shaderErosionAndDepositionUpdate;
+		gl::Shader *shaderSedimentTransportation;
+		gl::Shader *shaderSedimentTransportationUpdate;
 		
-		gl::Shader shaderThermalErosionCalculation;
-		gl::Shader shaderThermalErosionUpdate;
+		gl::Shader *shaderThermalErosionCalculation;
+		gl::Shader *shaderThermalErosionUpdate;
 		
-		gl::Shader shaderEvaporation;
-		gl::Shader shaderEvaporationUpdate;
+		gl::Shader *shaderEvaporation;
+		gl::Shader *shaderEvaporationUpdate;
 		
-		gl::Shader shaderSmooth;
-		gl::Shader shaderSmoothUpdate;
+		gl::Shader *shaderSmooth;
+		gl::Shader *shaderSmoothUpdate;
 		
-		gl::Shader shaderUpdateRainAndRiver;
+		gl::Shader *shaderUpdateRainAndRiver;
 		
-		gl::Shader shaderUpdateHeightTexture;
+		gl::Shader *shaderUpdateHeightTexture;
 		int textureUniformLocation;
 		
 		void CallCalcOutFlux();
@@ -154,8 +162,6 @@ struct Grid {
 		gl::VBO *vboVelocity = nullptr;
 		gl::VBO *vboFlux = nullptr;
 		
-		gl::VBO *vboRiverSources = nullptr;
-		
 		int width, height;
 		
 		void UpdateGround(GroundLayers *data);
@@ -164,8 +170,6 @@ struct Grid {
 		void UpdateTemp1(float *data);
 		void UpdateVelocity(Velocity *data);
 		void UpdateFlux(Flux *data);
-		void UpdateRiverSources(glm::vec3 *data, int amount);
-		
 		
 		void BindBuffers();
 		void SetUniforms(gl::Shader *shader);

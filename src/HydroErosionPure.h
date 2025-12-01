@@ -5,22 +5,27 @@
 
 #if GL_core_profile
 #else
+using uint = unsigned int;
 namespace glsl_noise
 {
 using namespace glm;
 #endif
 #include "../thirdparty/webgl-noise/src/cellular2D.glsl"
 #include "../thirdparty/psrdnoise/src/psrdnoise3.glsl"
+#include "../thirdparty/psrdnoise/src/psrdnoise2.glsl"
 #if GL_core_profile
 #else
 }
 #endif
+
+#include "./CGlslRandom.h"
 
 #if GL_core_profile
 #else
 namespace HydroPure
 {
 using namespace glm;
+using namespace glsl_noise;
 #endif
 
 layout(binding = 1) BUFFER(BufferBlock1, GroundLayers, ground);
@@ -93,6 +98,58 @@ inline int Neighbour(int x, int y, int dir)
 	return 0;
 }
 
+
+struct RiverSource {
+	ivec2 coord;
+	float amount;
+};
+
+inline RiverSource CalcRiverSource(ivec2 p)
+{
+	const uint sourcesGridSize = 73u;
+	uvec2 v = uvec2(p);
+	uvec2 md = v % sourcesGridSize;
+	uvec2 base = v / sourcesGridSize;
+
+	uvec4 rnd = RandomUint(ivec3(int(base.x), int(base.y), 0));
+
+	uvec2 source = v - md + (uvec2(rnd.x, rnd.y) % sourcesGridSize);
+	if (rnd.z % 7 == 0) {
+		return RiverSource(ivec2(source), 0.0);
+	}
+	float amount = float(rnd.w % 1511u) / 1510.0 + 0.1;
+	amount = amount * amount;
+	return RiverSource(ivec2(source), amount);
+}
+
+inline void UpdateRainAndRiver(int x, int y)
+{
+	int src = At(x, y);
+	float w = water[src];
+
+	vec3 coord =
+		vec3(float(x), float(y), float(iteration % 100000) * 0.02) * float(0.01);
+	vec3 grad;
+	float val = (psrdnoise(coord, vec3(0, 0, 0),
+						  0.001 * float(iteration % 100000), grad) *
+					0.5 +
+				0.5);
+	val = clamp(val, float(0.0), float(1.0));
+	val *= val;
+	val *= val;
+	val *= val;
+	val *= 0.01;
+
+	RiverSource rs = CalcRiverSource(ivec2(x, y));
+	ivec2 ap = (rs.coord - ivec2(x, y));
+	int dp = ap.x * ap.x + ap.y * ap.y;
+	if (dp <= 1) {
+		val += rs.amount / (1.0 + dp);// * (1.0 / 5.0);
+	}
+
+	water[src] = w + val * dt;
+}
+
 inline float SumFluxF(Flux f) { return f.f[0] + f.f[1] + f.f[2] + f.f[3]; }
 
 inline float SumFlux(int t) { return SumFluxF(flux[t]); }
@@ -144,7 +201,8 @@ inline void CalcOutFlux(int x, int y)
 	flux[src] = LimitFlux(src, f, waterLevel);
 }
 
-inline float UpdateWaterLevel(Flux srcFlux, int neighs[4], float oldWater, Flux neighFlux[4])
+inline float UpdateWaterLevel(Flux srcFlux, int neighs[4], float oldWater,
+							  Flux neighFlux[4])
 {
 	float fs = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0,
@@ -340,15 +398,10 @@ inline void ThermalErosionCalculation(int x, int y)
 		t1 = t1 * 2.0 * halfSqrt2;
 		t0 = t0 * 2.0 * halfSqrt2;
 	}
-	
+
 	float tmp = delta * (1.0 / 8.0) * 0.5 * dt;
 	g = AddGeneralGround(srcGround, tmp);
 	velocity[src] = Velocity(g.layers[0], g.layers[1]);
-}
-
-inline float EvaporationRate(int x, int y)
-{
-	return 0.03; // Make it dependent on temperature in place (x,y)
 }
 
 inline void ThermalErosionUpdate(int x, int y)
@@ -361,16 +414,21 @@ inline void ThermalErosionUpdate(int x, int y)
 	ground[src] = g;
 }
 
+inline float EvaporationRate(int x, int y)
+{
+	return 0.05; // Make it dependent on temperature in place (x,y)
+}
+
 inline void Evaporation(int x, int y)
 {
-	int src = At(x, y);
-	temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
+	// 	int src = At(x, y);
+	// 	temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
 }
 
 inline void EvaporationUpdate(int x, int y)
 {
-	int src = At(x, y);
-	water[src] = temp1[src];
+	// 	int src = At(x, y);
+	// 	water[src] = temp1[src];
 }
 
 inline void Smooth(int x, int y)
@@ -401,4 +459,3 @@ inline void ClearDelta(int x, int y)
 #else
 } // namespace HydroPure
 #endif
-

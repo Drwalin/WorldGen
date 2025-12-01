@@ -1,3 +1,6 @@
+#ifndef C_GLSL_SHARED_CODE_H
+#define C_GLSL_SHARED_CODE_H
+
 #if GL_core_profile
 #define inline
 #define IGNORE_UNUSED(VAR)
@@ -16,4 +19,6 @@
 #define uniform
 #define IGNORE_UNUSED(VAR) (void)VAR;
 #define BUFFER(BLOCK, TYPE, VAR) static TYPE *VAR = nullptr;
+#endif
+
 #endif
