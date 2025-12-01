@@ -6,13 +6,12 @@
 #include <string>
 #include <map>
 
-struct ArgumentParser {
+class ArgumentParser {
+public:
 	int argc;
 	char **argv;
 	
-	ArgumentParser(int argc, char **argv) {
-		this->argc = argc;
-		this->argv = argv;
+	ArgumentParser(int argc, char **argv) : argc(argc), argv(argv), args({}) {
 	}
 	
 	bool Bool(std::string name)

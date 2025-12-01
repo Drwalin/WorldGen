@@ -19,6 +19,7 @@ void Grid::CallHydroErosion()
 		gpu.CallErosionAndDepositionUpdate();
 		gpu.CallSedimentTransportation();
 		gpu.CallSedimentTransportationUpdate();
+// 		gpu.vboSediment->Copy(gpu.vboTemp1, 0, 0, elements * 4);
 	} else {
 		ForEachSafeBorders(HydroPure::CalcOutFlux);
 		ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
@@ -26,6 +27,7 @@ void Grid::CallHydroErosion()
 		ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
 		ForEachSafeBorders(HydroPure::SedimentTransportation);
 		ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
+// 		memcpy(sediment, temp1, elements * 4);
 	}
 }
 
@@ -33,17 +35,21 @@ void Grid::CallThermalErosion()
 {
 	if (useGpu) {
 		gpu.CallThermalErosionCalculation();
+// 		gpu.vboGround->Copy(gpu.vboVelocity, 0, 0, elements * 8);
 		gpu.CallThermalErosionUpdate();
 	} else {
 		ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
 		ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
+// 		memcpy(ground, velocity, elements * 8);
 	}
 }
 void Grid::CallEvaporation() {
 	if (useGpu) {
 		gpu.CallEvaporation();
+// 		gpu.vboWater->Copy(gpu.vboTemp1, 0, 0, elements * 4);
 	} else {
 		ForEachSafeBorders(HydroPure::Evaporation);
+// 		memcpy(water, temp1, elements * 4);
 	}
 }
 void Grid::CallSmoothing()
@@ -61,16 +67,17 @@ void Grid::CallSmoothing()
 
 void Grid::Init(int width, int height, bool useGpu)
 {
+	this->elements = width * height + 1;
 	this->useGpu = useGpu;
 	this->width = width;
 	this->height = height;
-	ground = new GroundLayers[width * height + OFF + 1] + OFF;
-	water = new float[width * height + OFF + 1] + OFF;
-	sediment = new float[width * height + OFF + 1] + OFF;
-	temp1 = new float[width * height + OFF + 1] + OFF;
-	velocity = new Velocity[width * height + OFF + 1] + OFF;
-	flux = new Flux[width * height + OFF + 1] + OFF;
-	for (int i = 1; i <= width * height; ++i) {
+	ground = new GroundLayers[elements + OFF] + OFF;
+	water = new float[elements + OFF] + OFF;
+	sediment = new float[elements + OFF] + OFF;
+	temp1 = new float[elements + OFF] + OFF;
+	velocity = new Velocity[elements + OFF] + OFF;
+	flux = new Flux[elements + OFF] + OFF;
+	for (int i = 0; i < elements; ++i) {
 		water[i] = 0.0f;
 		sediment[i] = 0.0f;
 		temp1[i] = 0.0f;
@@ -89,14 +96,14 @@ void Grid::Init(int width, int height, bool useGpu)
 Grid::Grid()
 {
 	width = height = 0;
-	dt = 0.01;
+	dt = 0.03;
 	crossSectionalAreaOfPipe = .6;
 	gravity = 9.81;
 	tileDimensionSize = 1;
 
 	depositionConstant = 0.03;
 	sedimentCapacityConstant = 0.03;
-	minimumSedimentCapacity = 0.01;
+	minimumSedimentCapacity = 0.03;
 }
 
 Grid::~Grid()

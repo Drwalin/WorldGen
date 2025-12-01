@@ -90,7 +90,7 @@ Grid grid;
 
 int main(int argc, char **argv)
 {
-	ArgumentParser args{argc, argv};
+	ArgumentParser args(argc, argv);
 	width = args.Int("width", 512+64, 16384, 512+64);
 	height = width;
 	riverSourcesCount = args.Int("riverSources", 0, 10000, 0);
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 			disableSimulation = !disableSimulation;
 		}
 		
-		if (disableRender) {
+		if (disableRender && (frames&3) == 3) {
 			gl::Finish();
 		}
 
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 				HydroErosionIteration();
 			}
 			
-			if (updateWaterHeights || updateHeights) {
+			if ((updateWaterHeights || updateHeights) && !disableRender) {
 				const auto now = std::chrono::steady_clock::now();
 				auto dur = (now - lastUpdateHeightsTexture);
 				if (dur > std::chrono::milliseconds(500)) {

@@ -77,17 +77,17 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 		{&shaderThermalErosionCalculation, "ThermalErosionCalculation"},
 		{&shaderThermalErosionUpdate, "ThermalErosionUpdate"},
 		{&shaderEvaporation, "Evaporation"},
+		{&shaderEvaporationUpdate, "EvaporationUpdate"},
 		{&shaderSmooth, "Smooth"},
 		{&shaderSmoothUpdate, "SmoothUpdate"}};
 	for (auto &it : pairs) {
-		shaderEvaporation.Unuse();
+		it.shader->Unuse();
 		it.shader->Compile(baseCode + prefix + it.name + postfix);
 		it.shader->Use();
 		BindBuffers();
 		SetUniforms(it.shader);
-		shaderEvaporation.Unuse();
+		it.shader->Unuse();
 	}
-	shaderEvaporation.Unuse();
 
 	shaderUpdateHeightTexture.Compile(baseCode + R"(
 
@@ -197,6 +197,7 @@ void Grid::GPUCompute::CallSedimentTransportationUpdate()
 {
 	CallShader(&shaderSedimentTransportationUpdate);
 }
+
 void Grid::GPUCompute::CallThermalErosionCalculation()
 {
 	CallShader(&shaderThermalErosionCalculation);
@@ -205,7 +206,10 @@ void Grid::GPUCompute::CallThermalErosionUpdate()
 {
 	CallShader(&shaderThermalErosionUpdate);
 }
+
 void Grid::GPUCompute::CallEvaporation() { CallShader(&shaderEvaporation); }
+void Grid::GPUCompute::CallEvaporationUpdate() { CallShader(&shaderEvaporationUpdate); }
+
 void Grid::GPUCompute::CallSmooth() { CallShader(&shaderSmooth); }
 void Grid::GPUCompute::CallSmoothUpdate() { CallShader(&shaderSmoothUpdate); }
 

@@ -32,6 +32,8 @@ struct Grid {
 	void Init(int width, int height, bool useGpu);
 	Grid();
 	~Grid();
+	
+	uint32_t elements;
 
 	GroundLayers *ground = nullptr;
 	float *water = nullptr;
@@ -40,7 +42,7 @@ struct Grid {
 	Velocity *velocity = nullptr;
 	Flux *flux = nullptr;
 
-	float hardness[2] = {0.003, 0.02};
+	float hardness[2] = {0.008, 0.02};
 // 	float hardness[2] = {0.01, 0.04};
 	// tan(30) ~= 0.577
 	// tan(45) ~= 1
@@ -113,6 +115,7 @@ struct Grid {
 		gl::Shader shaderThermalErosionUpdate;
 		
 		gl::Shader shaderEvaporation;
+		gl::Shader shaderEvaporationUpdate;
 		
 		gl::Shader shaderSmooth;
 		gl::Shader shaderSmoothUpdate;
@@ -128,9 +131,13 @@ struct Grid {
 		void CallErosionAndDepositionUpdate();
 		void CallSedimentTransportation();
 		void CallSedimentTransportationUpdate();
+		
 		void CallThermalErosionCalculation();
 		void CallThermalErosionUpdate();
+		
 		void CallEvaporation();
+		void CallEvaporationUpdate();
+		
 		void CallSmooth();
 		void CallSmoothUpdate();
 		

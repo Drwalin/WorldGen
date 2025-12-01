@@ -55,15 +55,14 @@ inline float TotalGround(int t)
 	return g.layers[0] + g.layers[1];
 }
 
-inline void AddGeneralGround(int t, float dv)
+inline GroundLayers AddGeneralGround(GroundLayers g, float dv)
 {
-	GroundLayers g = ground[t];
 	g.layers[1] += dv;
 	if (g.layers[1] < 0) {
 		g.layers[0] += g.layers[1];
 		g.layers[1] = 0;
 	}
-	ground[t] = g;
+	return g;
 }
 
 inline int At(int x, int y)
@@ -111,10 +110,10 @@ inline float CalcFluxInDirection(int src, int neigh, int dir, Flux fl,
 	return f;
 }
 
-inline Flux LimitFlux(int src, Flux f)
+inline Flux LimitFlux(int src, Flux f, float waterLevel)
 {
 	const float outflux = SumFluxF(f);
-	const float _water = water[src] * l * l;
+	const float _water = waterLevel * l * l;
 	if (outflux <= 0.001) {
 		f.f[0] = 0;
 		f.f[1] = 0;
@@ -136,21 +135,20 @@ inline void CalcOutFlux(int x, int y)
 {
 	int src = At(x, y);
 	Flux f = flux[src];
+	float waterLevel = water[src];
+	float srcSum = TotalGround(src) + sediment[src] + waterLevel;
 	NEIGHBOURS(neighs, x, y);
-
-	float srcSum = TotalGround(src) + sediment[src] + water[src];
-
 	FOR_EACH_DIR_COND(
 		neighs[DIR] != 0,
 		(f.f[DIR] = CalcFluxInDirection(src, neighs[DIR], DIR, f, srcSum));)
-	flux[src] = LimitFlux(src, f);
+	flux[src] = LimitFlux(src, f, waterLevel);
 }
 
-inline float UpdateWaterLevel(int src, int neighs[4], float oldWater)
+inline float UpdateWaterLevel(Flux srcFlux, int neighs[4], float oldWater, Flux neighFlux[4])
 {
 	float fs = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0,
-					  fs += flux[neighs[DIR]].f[R_DIR] - flux[src].f[DIR];)
+					  fs += neighFlux[DIR].f[R_DIR] - srcFlux.f[DIR];)
 	oldWater += (dt / (l * l)) * fs;
 	if (oldWater < 0) {
 		oldWater = 0;
@@ -162,21 +160,23 @@ inline void UpdateWaterLevelAndVelocity(int x, int y)
 {
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
-	float water_level = water[src];
-	float newWater = UpdateWaterLevel(src, neighs, water_level);
-	water_level = (water_level + newWater) * 0.5;
+	float oldWater = water[src];
+	Flux srcFlux = flux[src];
+	Flux neighFlux[4];
+	FOR_EACH_DIR_COND(neighs[DIR] != 0, neighFlux[DIR] = flux[neighs[DIR]];)
+	float newWater = UpdateWaterLevel(srcFlux, neighs, oldWater, neighFlux);
+	float water_level = (oldWater + newWater) * 0.5;
 	if (water_level < 0.001) {
-		velocity[src].x = 0;
-		velocity[src].y = 0;
+		water[src] = newWater;
+		velocity[src] = Velocity(0, 0);
 		return;
 	}
 	float dWx = 0, dWy = 0;
-	COND_GRID(neighs[0] != 0, dWx -= flux[neighs[0]].f[2] - flux[src].f[0];)
-	COND_GRID(neighs[1] != 0, dWy -= flux[neighs[1]].f[3] - flux[src].f[1];)
-	COND_GRID(neighs[2] != 0, dWx += flux[neighs[2]].f[0] - flux[src].f[2];)
-	COND_GRID(neighs[3] != 0, dWy += flux[neighs[3]].f[1] - flux[src].f[3];)
-	velocity[src].x = dWx / (water_level * l);
-	velocity[src].y = dWy / (water_level * l);
+	COND_GRID(neighs[0] != 0, dWx -= neighFlux[0].f[2] - srcFlux.f[0];)
+	COND_GRID(neighs[1] != 0, dWy -= neighFlux[1].f[3] - srcFlux.f[1];)
+	COND_GRID(neighs[2] != 0, dWx += neighFlux[2].f[0] - srcFlux.f[2];)
+	COND_GRID(neighs[3] != 0, dWy += neighFlux[3].f[1] - srcFlux.f[3];)
+	velocity[src] = Velocity(dWx / (water_level * l), dWy / (water_level * l));
 	water[src] = newWater;
 }
 
@@ -218,12 +218,13 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 {
 	int src = At(x, y);
 	float capacity = CalcSedimentCapacity(src, x, y);
+	float sed = sediment[src];
 
-	const float delta = (capacity - sediment[src]) * dt;
+	const float delta = (capacity - sed) * dt;
 	float res = 0;
 	GroundLayers g = ground[src];
 
-	if (capacity > sediment[src]) {
+	if (capacity > sed) {
 		// picking up sediment
 		float f = hardness[1] * delta;
 		float l1 = g.layers[1];
@@ -242,9 +243,11 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 inline void ErosionAndDepositionUpdate(int x, int y)
 {
 	int src = At(x, y);
+	GroundLayers g = ground[src];
+	float sed = sediment[src];
 	float ds = temp1[src];
-	AddGeneralGround(src, -ds);
-	sediment[src] += ds;
+	ground[src] = AddGeneralGround(g, -ds);
+	sediment[src] = sed + ds;
 }
 
 inline void SedimentTransportation(int x, int y)
@@ -277,7 +280,8 @@ inline void ThermalErosionCalculation(int x, int y)
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
 	NEIGHBOURS_CORNERS(neighCorners, x, y);
-	GroundLayers g = ground[src];
+	GroundLayers srcGround = ground[src];
+	GroundLayers g = srcGround;
 	float _h11 = g.layers[1];
 	float _h0 = g.layers[0];
 	float _h1 = _h0 + _h11;
@@ -336,24 +340,37 @@ inline void ThermalErosionCalculation(int x, int y)
 		t1 = t1 * 2.0 * halfSqrt2;
 		t0 = t0 * 2.0 * halfSqrt2;
 	}
-	temp1[src] = delta * (1.0 / 8.0) * 0.5 * dt;
+	
+	float tmp = delta * (1.0 / 8.0) * 0.5 * dt;
+	g = AddGeneralGround(srcGround, tmp);
+	velocity[src] = Velocity(g.layers[0], g.layers[1]);
+}
+
+inline float EvaporationRate(int x, int y)
+{
+	return 0.03; // Make it dependent on temperature in place (x,y)
 }
 
 inline void ThermalErosionUpdate(int x, int y)
 {
 	int src = At(x, y);
-	AddGeneralGround(src, temp1[src]);
-}
-
-inline float EvaporationRate(int x, int y)
-{
-	return 0.04; // Make it dependent on temperature in place (x,y)
+	Velocity v = velocity[src];
+	GroundLayers g;
+	g.layers[0] = v.x;
+	g.layers[1] = v.y;
+	ground[src] = g;
 }
 
 inline void Evaporation(int x, int y)
 {
 	int src = At(x, y);
-	water[src] *= (1 - EvaporationRate(x, y) * dt);
+	temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
+}
+
+inline void EvaporationUpdate(int x, int y)
+{
+	int src = At(x, y);
+	water[src] = temp1[src];
 }
 
 inline void Smooth(int x, int y)

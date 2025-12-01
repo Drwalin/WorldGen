@@ -26,8 +26,6 @@
 #include <glm/vec2.hpp>
 #include <glm/mat2x2.hpp>
 
-// #include "../../thirdparty/OpenSimplex2/OpenSimplex2F/OpenSimplex2F.hpp"
-
 namespace wg
 {
 class SimplexNoise
@@ -52,8 +50,6 @@ public:
 	float Terrain(glm::vec2 p, float verticalScale);
 	
 private:
-// 	static OpenSimplex2F::OpenSimplexEnv *ose;
-// 	OpenSimplex2F::OpenSimplexGradients *osg = nullptr;
 	uint64_t seed;
 	static constexpr int AMOUNT_SEEDED_VALS = 64;
 	float seedf[AMOUNT_SEEDED_VALS];
