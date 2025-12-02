@@ -268,7 +268,14 @@ int main(int argc, char **argv)
 			if ((updateWaterHeights || updateHeights) && !disableRender) {
 				const auto now = std::chrono::steady_clock::now();
 				auto dur = (now - lastUpdateHeightsTexture);
-				if (dur > std::chrono::milliseconds(500)) {
+				
+				int durMs = 500;
+				if (width < 3200) durMs = 400;
+				if (width < 2200) durMs = 333;
+				else if (width < 1500) durMs = 250;
+				else if (width < 1040) durMs = 200;
+				
+				if (dur > std::chrono::milliseconds(durMs)) {
 					lastUpdateHeightsTexture = now;
 					if (gridInited && useGpu) {
 						grid.gpu.UpdateHeightsTexture(&heightsTexture);

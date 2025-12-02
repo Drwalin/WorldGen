@@ -98,7 +98,6 @@ inline int Neighbour(int x, int y, int dir)
 	return 0;
 }
 
-
 struct RiverSource {
 	ivec2 coord;
 	float amount;
@@ -117,7 +116,7 @@ inline RiverSource CalcRiverSource(ivec2 p)
 	if (rnd.z % 7 == 0) {
 		return RiverSource(ivec2(source), 0.0);
 	}
-	float amount = float(rnd.w % 1511u) / 1510.0 + 0.1;
+	float amount = float(rnd.w % 1511u) / 1024.0 + 0.3;
 	amount = amount * amount;
 	return RiverSource(ivec2(source), amount);
 }
@@ -416,19 +415,19 @@ inline void ThermalErosionUpdate(int x, int y)
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.05; // Make it dependent on temperature in place (x,y)
+	return 0.03 * 0.5; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)
 {
-	// 	int src = At(x, y);
-	// 	temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
+		int src = At(x, y);
+		temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
 }
 
 inline void EvaporationUpdate(int x, int y)
 {
-	// 	int src = At(x, y);
-	// 	water[src] = temp1[src];
+		int src = At(x, y);
+		water[src] = temp1[src];
 }
 
 inline void Smooth(int x, int y)

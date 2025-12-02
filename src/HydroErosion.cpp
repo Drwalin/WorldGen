@@ -105,8 +105,8 @@ Grid::Grid()
 	tileDimensionSize = 1;
 
 	depositionConstant = 0.03;
-	sedimentCapacityConstant = 0.03;
-	minimumSedimentCapacity = 0.03;
+	sedimentCapacityConstant = 0.01;
+	minimumSedimentCapacity = 0.01;
 }
 
 Grid::~Grid()

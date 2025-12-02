@@ -53,11 +53,12 @@ struct Grid {
 	float hardness[2] = {0.008, 0.02};
 // 	float hardness[2] = {0.01, 0.04};
 	// tan(30) ~= 0.577
+	// tan(34) ~= 0.675
 	// tan(45) ~= 1
 	// tan(60) ~= 1.732
 	// tan(75) ~= 3.732
-	static constexpr float tangentOfAngleOfRecluse[2] = {1.7f, 1.0f};
-	// {(float)tan(M_PI/4.0f), (float)tan(M_PI/6.0f)}; // 60*, 45*
+	static constexpr float tangentOfAngleOfRecluse[2] = {1, 0.675}; // 45* 34*
+	// static constexpr float tangentOfAngleOfRecluse[2] = {1.7f, 1.0f}; // 60* 45*
 
 	int width, height;
 	float dt = 0.03;
