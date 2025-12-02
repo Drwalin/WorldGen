@@ -5,19 +5,6 @@
 
 Grid::GPUCompute::~GPUCompute()
 {
-	delete shaderCalcOutFlux;
-	delete shaderUpdateWaterLevelAndVelocity;
-	delete shaderErosionAndDepositionCalculation;
-	delete shaderErosionAndDepositionUpdate;
-	delete shaderSedimentTransportation;
-	delete shaderSedimentTransportationUpdate;
-	delete shaderThermalErosionCalculation;
-	delete shaderThermalErosionUpdate;
-	delete shaderEvaporation;
-	delete shaderEvaporationUpdate;
-	delete shaderSmooth;
-	delete shaderSmoothUpdate;
-	delete shaderUpdateRainAndRiver;
 	delete shaderUpdateHeightTexture;
 
 	delete vboGround;
@@ -46,19 +33,6 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 	this->width = w;
 	this->height = h;
 
-	shaderCalcOutFlux = new gl::Shader();
-	shaderUpdateWaterLevelAndVelocity = new gl::Shader();
-	shaderErosionAndDepositionCalculation = new gl::Shader();
-	shaderErosionAndDepositionUpdate = new gl::Shader();
-	shaderSedimentTransportation = new gl::Shader();
-	shaderSedimentTransportationUpdate = new gl::Shader();
-	shaderThermalErosionCalculation = new gl::Shader();
-	shaderThermalErosionUpdate = new gl::Shader();
-	shaderEvaporation = new gl::Shader();
-	shaderEvaporationUpdate = new gl::Shader();
-	shaderSmooth = new gl::Shader();
-	shaderSmoothUpdate = new gl::Shader();
-	shaderUpdateRainAndRiver = new gl::Shader();
 	shaderUpdateHeightTexture = new gl::Shader();
 
 	vboGround = new gl::VBO(sizeof(ground[0]), gl::SHADER_STORAGE_BUFFER,
@@ -97,31 +71,19 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 		gl::Shader::LoadFileUseIncludes("../src/HydroErosionPure.h").c_str() +
 		"\n";
 
-	struct Pair {
-		gl::Shader *shader;
-		const char *name;
-	} pairs[] = {
-		{shaderUpdateRainAndRiver, "UpdateRainAndRiver"},
-		{shaderCalcOutFlux, "CalcOutFlux"},
-		{shaderUpdateWaterLevelAndVelocity, "UpdateWaterLevelAndVelocity"},
-		{shaderErosionAndDepositionCalculation,
-		 "ErosionAndDepositionCalculation"},
-		{shaderErosionAndDepositionUpdate, "ErosionAndDepositionUpdate"},
-		{shaderSedimentTransportation, "SedimentTransportation"},
-		{shaderSedimentTransportationUpdate, "SedimentTransportationUpdate"},
-		{shaderThermalErosionCalculation, "ThermalErosionCalculation"},
-		{shaderThermalErosionUpdate, "ThermalErosionUpdate"},
-		{shaderEvaporation, "Evaporation"},
-		{shaderEvaporationUpdate, "EvaporationUpdate"},
-		{shaderSmooth, "Smooth"},
-		{shaderSmoothUpdate, "SmoothUpdate"}};
-	for (auto &it : pairs) {
-		it.shader->Unuse();
-		it.shader->Compile(baseCode + prefix + it.name + postfix);
-		it.shader->Use();
-		BindBuffers();
-		SetUniforms(it.shader);
-		it.shader->Unuse();
+	for (auto &st : grid->stages) {
+		for (auto &it : st) {
+			it.shader = new gl::Shader();
+			it.shader->Unuse();
+			it.shader->Compile(baseCode + prefix + it.functionName + postfix);
+			it.shader->Use();
+			BindBuffers();
+			SetUniforms(it.shader);
+			it.shader->Unuse();
+			it.functionGpu = [this](gl::Shader *shader) {
+				CallShader(shader);
+			};
+		}
 	}
 
 	shaderUpdateHeightTexture->Compile(baseCode + R"(
@@ -184,57 +146,12 @@ void Grid::GPUCompute::SetUniforms(gl::Shader *shader)
 	glUniform1i(shader->GetUniformLocation("iteration"), grid->iteration);
 }
 
-void Grid::GPUCompute::CallCalcOutFlux() { CallShader(shaderCalcOutFlux); }
-void Grid::GPUCompute::CallUpdateWaterLevelAndVelocity()
-{
-	CallShader(shaderUpdateWaterLevelAndVelocity);
-}
-void Grid::GPUCompute::CallErosionAndDepositionCalculation()
-{
-	CallShader(shaderErosionAndDepositionCalculation);
-}
-void Grid::GPUCompute::CallErosionAndDepositionUpdate()
-{
-	CallShader(shaderErosionAndDepositionUpdate);
-}
-void Grid::GPUCompute::CallSedimentTransportation()
-{
-	CallShader(shaderSedimentTransportation);
-}
-void Grid::GPUCompute::CallSedimentTransportationUpdate()
-{
-	CallShader(shaderSedimentTransportationUpdate);
-}
-
-void Grid::GPUCompute::CallThermalErosionCalculation()
-{
-	CallShader(shaderThermalErosionCalculation);
-}
-void Grid::GPUCompute::CallThermalErosionUpdate()
-{
-	CallShader(shaderThermalErosionUpdate);
-}
-
-void Grid::GPUCompute::CallEvaporation() { CallShader(shaderEvaporation); }
-void Grid::GPUCompute::CallEvaporationUpdate()
-{
-	CallShader(shaderEvaporationUpdate);
-}
-
-void Grid::GPUCompute::CallSmooth() { CallShader(shaderSmooth); }
-void Grid::GPUCompute::CallSmoothUpdate() { CallShader(shaderSmoothUpdate); }
-
 void Grid::GPUCompute::CallShader(gl::Shader *shader)
 {
 	shader->Use();
 	SetUniforms(shader);
 	shader->DispatchRoundGroupNumbers(width, height, 1);
 	shader->Unuse();
-}
-
-void Grid::GPUCompute::CallUpdateRainAndRiver()
-{
-	CallShader(shaderUpdateRainAndRiver);
 }
 
 void Grid::GPUCompute::UpdateHeightsTexture(gl::Texture *tex)
@@ -280,4 +197,9 @@ void Grid::GPUCompute::UpdateTemp1(float *data)
 {
 	gl::VBO *vbo = vboWaterSedimentTemp;
 	vbo->Update(data - PADDING, 2ll * grid->elementsStorage * sizeof(float), grid->elementsStorage * sizeof(float));
+}
+void Grid::GPUCompute::UpdateTemp2(float *data)
+{
+	gl::VBO *vbo = vboWaterSedimentTemp;
+	vbo->Update(data - PADDING, 3ll * grid->elementsStorage * sizeof(float), grid->elementsStorage * sizeof(float));
 }

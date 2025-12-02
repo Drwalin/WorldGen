@@ -3,6 +3,9 @@
 #ifndef HYDRO_EROSION_HPP
 #define HYDRO_EROSION_HPP
 
+#include <vector>
+#include <functional>
+
 #include "../../../OpenGLWrapper/include/openglwrapper/VBO.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Shader.hpp"
 #include "../../../OpenGLWrapper/include/openglwrapper/Texture.hpp"
@@ -28,9 +31,11 @@ namespace gl
 struct Grid {
 	int parallelThreads = 1;
 	bool useGpu;
+	
 	bool useWater = true;
 	bool useThermalErosion = true;
 	bool useSmoothing = false;
+	
 	bool parallel = false;
 
 	constexpr static int ALIGNEMENT = 16;
@@ -54,6 +59,7 @@ struct Grid {
 	float *water = nullptr;
 	float *sediment = nullptr;
 	float *temp1 = nullptr;
+	float *temp2 = nullptr;
 
 	float hardness[2] = {0.008, 0.02};
 // 	float hardness[2] = {0.01, 0.04};
@@ -102,11 +108,6 @@ struct Grid {
 		return (x * height + y) + 1;
 	}
 
-	void CallHydroErosion();
-	void CallThermalErosion();
-	void CallSmoothing();
-	void CallEvaporation();
-
 	template <typename TFunc> void ForEachSafeBorders(TFunc &&funcSafe);
 
 	float SumFlux(int t);
@@ -115,51 +116,27 @@ struct Grid {
 	void FullCycle();
 	void UpdateHeightsTexture(gl::Texture *tex);
 	
+	struct StageData {
+		std::function<void()> functionCpu;
+		std::function<void(gl::Shader*)> functionGpu;
+		gl::Shader* shader = nullptr;
+		std::string functionName;
+		
+		~StageData() {
+			delete[] shader;
+		}
+	};
+	std::vector<std::vector<StageData>> stages;
+	
 	struct GPUCompute {
 		~GPUCompute();
-		
-		gl::Shader *shaderCalcOutFlux;
-		gl::Shader *shaderUpdateWaterLevelAndVelocity;
-		gl::Shader *shaderErosionAndDepositionCalculation;
-		gl::Shader *shaderErosionAndDepositionUpdate;
-		gl::Shader *shaderSedimentTransportation;
-		gl::Shader *shaderSedimentTransportationUpdate;
-		
-		gl::Shader *shaderThermalErosionCalculation;
-		gl::Shader *shaderThermalErosionUpdate;
-		
-		gl::Shader *shaderEvaporation;
-		gl::Shader *shaderEvaporationUpdate;
-		
-		gl::Shader *shaderSmooth;
-		gl::Shader *shaderSmoothUpdate;
-		
-		gl::Shader *shaderUpdateRainAndRiver;
 		
 		gl::Shader *shaderUpdateHeightTexture;
 		int textureUniformLocation;
 		
-		void CallCalcOutFlux();
-		void CallUpdateWaterLevelAndVelocity();
-		void CallErosionAndDepositionCalculation();
-		void CallErosionAndDepositionUpdate();
-		void CallSedimentTransportation();
-		void CallSedimentTransportationUpdate();
-		
-		void CallThermalErosionCalculation();
-		void CallThermalErosionUpdate();
-		
-		void CallEvaporation();
-		void CallEvaporationUpdate();
-		
-		void CallSmooth();
-		void CallSmoothUpdate();
-		
 		void CallShader(gl::Shader *shader);
 		
-		void CallUpdateRainAndRiver();
 		void UpdateHeightsTexture(gl::Texture *tex);
-		
 		
 		gl::VBO *vboGround = nullptr;
 		gl::VBO *vboVelocity = nullptr;
@@ -172,6 +149,7 @@ struct Grid {
 		void UpdateWater(float *data);
 		void UpdateSediment(float *data);
 		void UpdateTemp1(float *data);
+		void UpdateTemp2(float *data);
 		void UpdateVelocity(Velocity *data);
 		void UpdateFlux(Flux *data);
 		

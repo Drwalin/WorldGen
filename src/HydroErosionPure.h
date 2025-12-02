@@ -55,20 +55,21 @@ layout(std430, binding = 4) buffer BufferBlock7 {
 	float paddingTemp1[PADDING];
 	float temp1[ELEMENTS];
 	
-// 	float paddingTemp2[PADDING];
-// 	float temp2[ELEMENTS];
+	float paddingTemp2[PADDING];
+	float temp2[ELEMENTS];
 };
 #else
 static float *water = nullptr;
 static float *sediment = nullptr;
 static float *temp1 = nullptr;
+static float *temp2 = nullptr;
 #endif
 
 #if GL_core_profile
 #else
 namespace _____holder
 {
-inline void _holder() { (void)iteration; }
+inline void _holder() { (void)iteration; (void)temp2; }
 } // namespace _____holder
 #endif
 
@@ -215,7 +216,8 @@ inline void CalcOutFlux(int x, int y)
 	FOR_EACH_DIR_COND(
 		neighs[DIR] != 0,
 		(f.f[DIR] = CalcFluxInDirection(src, neighs[DIR], DIR, f, srcSum));)
-	flux[src] = LimitFlux(src, f, waterLevel);
+	f = LimitFlux(src, f, waterLevel);
+	flux[src] = f;
 }
 
 inline float UpdateWaterLevel(Flux srcFlux, int neighs[4], float oldWater,
@@ -448,6 +450,8 @@ inline void EvaporationUpdate(int x, int y)
 		water[src] = temp1[src];
 }
 
+// TODO: replace with selectional smoothing, to smooth only where slope
+// changes very rapidly
 inline void Smooth(int x, int y)
 {
 	int src = At(x, y);

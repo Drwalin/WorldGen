@@ -21,12 +21,13 @@
 
 #include <random>
 
-#include <glm/matrix.hpp>
-
 #include "../include/worldgen/Hash.hpp"
 #include "../include/worldgen/Noises.hpp"
 
 #include "../include/worldgen/GlslSharedWithCpp_Header.h"
+#ifndef C_GLSL_SHARED_CODE_H
+#endif
+
 namespace glsl_noise
 {
 using namespace glm;

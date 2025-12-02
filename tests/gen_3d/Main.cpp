@@ -101,7 +101,6 @@ int main(int argc, char **argv)
 	ArgumentParser args(argc, argv);
 	width = args.Int("width", 512+64, 16384, 512+64);
 	height = width;
-	riverSourcesCount = args.Int("riverSources", 0, 10000, 0);
 	generatorYScale = args.Float("scaleY", 0.001f, 100.0f, 1.0f);
 	SOFT_LAYER = args.Float("softLayerDepth", 0.0f, 1000.0f, 1.0f);
 	const int maxMeshSize = args.Int("meshSize", 64, 4096, 512);
@@ -484,7 +483,6 @@ void HydroErosionIteration()
 {
 	static auto lastUpdateHeightsTexture = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 	static wg::SimplexNoise simplex(432127);
-	static std::vector<glm::vec3> riverSources;
 	
 	if (HYDRO_ITER == 0) {
 		{
@@ -493,14 +491,6 @@ void HydroErosionIteration()
 			const auto b = std::chrono::steady_clock::now();
 			float ms = std::chrono::nanoseconds(b - a).count() / 1'000'000.0;
 			printf("\nGrid init took: %10.6f ms       \n", ms);
-		}
-		
-		for (int i=0; i<riverSourcesCount; ++i) {
-			glm::vec3 p;
-			p.x = ((mt() % width) - 128) + 64;
-			p.y = ((mt() % height) - 128) + 64;
-			p.z = (mt() % 1000) / 100.0f + 10.0f;
-			riverSources.push_back(p);
 		}
 
 		int maxHeight = 0;
@@ -514,17 +504,10 @@ void HydroErosionIteration()
 				if (_x > 64 && _x < width - 64 && _y > 64 && _y < height - 64) {
 					if (vertHeights[i].h > vertHeights[maxHeight].h) {
 						maxHeight = i;
-						if (riverSources.size() > 0) {
-							riverSources[0] = {_x, _y, 500};
-						}
 					}
 				}
 				grid.water[t] = 0.1 * 0;
 			}
-		}
-		if (riverSources.size() > 0) {
-			riverSources[0].x += (mt() % 11) - 5;
-			riverSources[0].y += (mt() % 11) - 5;
 		}
 		
 		HYDRO_ITER = HYDRO_ITER + 1;
@@ -564,58 +547,6 @@ void HydroErosionIteration()
 			}
 		}
 	}
-	
-	if (grid.useWater && grid.useGpu == false) {
-		for (auto p : riverSources) {
-			int i = grid.At(p.x, p.y);
-			grid.water[i] += p.z * grid.dt;
-		}
-		
-		for (int i=0; i<width * pow(width, 0.2); ++i) {
-			int id = (mt()%(width*height));
-			grid.water[id] += 0.01f;
-		}
-
-		if (HYDRO_ITER % 500 == 0) {
-			long double SUM = 0;
-			for (int _y = 0; _y < height; ++_y) {
-				for (int _x = 0; _x < width; ++_x) {
-					/*
-					const float x = _x;
-					const float y = _y;
-
-					const float _rain =
-						simplex.Noise2(glm::vec3(-x / 531 - 100, y / 531 + 1000, HYDRO_ITER / 100.0f))
-						*2.0f - 0.5f;
-					
-					const float rain = _rain < 0.0f ? 0.0f : _rain * (HYDRO_ITER==0 ? 1.0f : 0.01f);
-					
-					if (rain < 0) {
-						printf("rain = %f\n", rain);
-					}
-					*/
-					
-					int p = grid.At(_x, _y);
-					
-					grid.water[p] += 0.0001f * (HYDRO_ITER < 100 ? 500 : 1);//rain;
-					
-					SUM += grid.ground[p].layers[0] + grid.sediment[p];
-				}
-			}
-			SUM_MATERIAL = SUM;
-		}
-		
-		if (true) {
-			grid.water[grid.At(1, 1)] += 0.1;
-			grid.water[grid.At(1, 1)] += 0.1 * pow(sin(HYDRO_ITER/15.0f) + 1.0f, 2);
-			for (int _y = 13; _y < 18; ++_y) {
-				for (int _x = 498; _x < 503; ++_x) {
-					grid.water[grid.At(15, 500)] += 0.1 * pow(sin(HYDRO_ITER/80.0f), 4);
-				}
-			}
-		}
-	}
-	
 	
 	grid.FullCycle();
 

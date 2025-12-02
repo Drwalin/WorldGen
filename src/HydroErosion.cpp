@@ -9,64 +9,6 @@
 #include "../include/worldgen/HydroErosion.hpp"
 #include "HydroErosionPure.h"
 
-void Grid::CallHydroErosion()
-{
-	if (useGpu) {
-		gpu.CallUpdateRainAndRiver();
-		gpu.CallCalcOutFlux();
-		gpu.CallUpdateWaterLevelAndVelocity();
-		gpu.CallErosionAndDepositionCalculation();
-		gpu.CallErosionAndDepositionUpdate();
-		gpu.CallSedimentTransportation();
-		gpu.CallSedimentTransportationUpdate();
-// 		gpu.vboSediment->Copy(gpu.vboTemp1, 0, 0, elements * 4);
-	} else {
-		ForEachSafeBorders(HydroPure::CalcOutFlux);
-		ForEachSafeBorders(HydroPure::UpdateWaterLevelAndVelocity);
-		ForEachSafeBorders(HydroPure::ErosionAndDepositionCalculation);
-		ForEachSafeBorders(HydroPure::ErosionAndDepositionUpdate);
-		ForEachSafeBorders(HydroPure::SedimentTransportation);
-		ForEachSafeBorders(HydroPure::SedimentTransportationUpdate);
-// 		memcpy(sediment, temp1, elements * 4);
-	}
-}
-
-void Grid::CallThermalErosion()
-{
-	if (useGpu) {
-		gpu.CallThermalErosionCalculation();
-// 		gpu.vboGround->Copy(gpu.vboVelocity, 0, 0, elements * 8);
-		gpu.CallThermalErosionUpdate();
-	} else {
-		ForEachSafeBorders(HydroPure::ThermalErosionCalculation);
-		ForEachSafeBorders(HydroPure::ThermalErosionUpdate);
-// 		memcpy(ground, velocity, elements * 8);
-	}
-}
-void Grid::CallEvaporation() {
-	if (useGpu) {
-		gpu.CallEvaporation();
-		gpu.CallEvaporationUpdate();
-// 		gpu.vboWater->Copy(gpu.vboTemp1, 0, 0, elements * 4);
-	} else {
-		ForEachSafeBorders(HydroPure::Evaporation);
-		ForEachSafeBorders(HydroPure::EvaporationUpdate);
-// 		memcpy(water, temp1, elements * 4);
-	}
-}
-void Grid::CallSmoothing()
-{
-	// TODO: replace with selectional smoothing, to smooth only where slope
-	// changes very rapidly
-	if (useGpu) {
-		gpu.CallSmooth();
-		gpu.CallSmoothUpdate();
-	} else {
-		ForEachSafeBorders(HydroPure::Smooth);
-		ForEachSafeBorders(HydroPure::SmoothUpdate);
-	}
-}
-
 void Grid::Init(int w, int h, bool useGpu)
 {
 	width = w;
@@ -87,13 +29,15 @@ void Grid::Init(int w, int h, bool useGpu)
 	water_sediment_temp = new glm::vec4[elementsStorage];
 	
 	water = ((float*)water_sediment_temp) + OFFSET;
-	sediment = water + elementsStorage;
-	temp1 = sediment + elementsStorage;
+	sediment = water + elementsStorage * 1;
+	temp1 = water + elementsStorage * 2;
+	temp2 = water + elementsStorage * 3;
 	
 	for (int i = 0; i < elements; ++i) {
 		water[i] = 0.0f;
 		sediment[i] = 0.0f;
 		temp1[i] = 0.0f;
+		temp2[i] = 0.0f;
 		flux[i].f[0] = 0;
 		flux[i].f[1] = 0;
 		flux[i].f[2] = 0;
@@ -101,6 +45,36 @@ void Grid::Init(int w, int h, bool useGpu)
 		ground[i].layers[0] = 0;
 		ground[i].layers[1] = 0;
 	}
+	
+	
+	
+#define DEFINE_STAGE(NAME) StageData{ \
+	.functionCpu = [this]() { \
+		ForEachSafeBorders(HydroPure::NAME); \
+	}, \
+	.functionName = #NAME \
+}
+	stages = {
+		{
+			DEFINE_STAGE(UpdateRainAndRiver),
+			DEFINE_STAGE(CalcOutFlux),
+			DEFINE_STAGE(UpdateWaterLevelAndVelocity),
+			DEFINE_STAGE(ErosionAndDepositionCalculation),
+			DEFINE_STAGE(ErosionAndDepositionUpdate),
+			DEFINE_STAGE(SedimentTransportation),
+			DEFINE_STAGE(SedimentTransportationUpdate)
+		}, {
+			DEFINE_STAGE(ThermalErosionCalculation),
+			DEFINE_STAGE(ThermalErosionUpdate)
+		}, {
+			DEFINE_STAGE(Evaporation),
+			DEFINE_STAGE(EvaporationUpdate)
+		}, {
+			DEFINE_STAGE(Smooth),
+			DEFINE_STAGE(SmoothUpdate)
+		}
+	};
+	
 	if (useGpu) {
 		gpu.Init(width, height, this);
 	}
@@ -209,6 +183,7 @@ void Grid::FullCycle()
 	HydroPure::ground = ground;
 	HydroPure::sediment = sediment;
 	HydroPure::temp1 = temp1;
+	HydroPure::temp2 = temp2;
 	HydroPure::velocity = velocity;
 	HydroPure::flux = flux;
 
@@ -227,20 +202,28 @@ void Grid::FullCycle()
 	HydroPure::minimumSedimentCapacity = minimumSedimentCapacity;
 	
 	HydroPure::iteration = iteration;
+	
+	auto call = [this](std::vector<StageData> &stage) {
+		for (auto &data : stage) {
+			if (useGpu) {
+				data.functionGpu(data.shader);
+			} else {
+				data.functionCpu();
+			}
+		}
+	};
 
 	if (useWater) {
-		CallHydroErosion();
+		call(stages[0]);
 	}
 	if (useThermalErosion) {
-		CallThermalErosion();
+		call(stages[1]);
 	}
 	if (useWater) {
-		CallEvaporation();
+		call(stages[2]);
 	}
 	if (useSmoothing && iteration % 47 == 0) {
-		// TODO: replace with selectional smoothing, to smooth only where slope
-		// changes very rapidly
-		CallSmoothing();
+		call(stages[3]);
 	}
 	
 	++iteration;
