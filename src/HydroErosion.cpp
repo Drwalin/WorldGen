@@ -56,11 +56,10 @@ void Grid::Init(int w, int h, bool useGpu)
 }
 	stages = {
 		{
-			DEFINE_STAGE(UpdateRainAndRiver),
+			DEFINE_STAGE(RainAndRiverUpdate),
 			DEFINE_STAGE(CalcOutFlux),
-			DEFINE_STAGE(UpdateWaterLevelAndVelocity),
+			DEFINE_STAGE(WaterLevelAndVelocityUpdate),
 			DEFINE_STAGE(ErosionAndDepositionCalculation),
-			DEFINE_STAGE(ErosionAndDepositionUpdate),
 			DEFINE_STAGE(SedimentTransportation),
 			DEFINE_STAGE(SedimentTransportationUpdate)
 		}, {
@@ -68,7 +67,6 @@ void Grid::Init(int w, int h, bool useGpu)
 			DEFINE_STAGE(ThermalErosionUpdate)
 		}, {
 			DEFINE_STAGE(Evaporation),
-			DEFINE_STAGE(EvaporationUpdate)
 		}, {
 			DEFINE_STAGE(Smooth),
 			DEFINE_STAGE(SmoothUpdate)

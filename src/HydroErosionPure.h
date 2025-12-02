@@ -124,7 +124,7 @@ struct RiverSource {
 
 inline RiverSource CalcRiverSource(ivec2 p)
 {
-	const uint sourcesGridSize = 97u;
+	const uint sourcesGridSize = 191u;
 	uvec2 v = uvec2(p);
 	uvec2 md = v % sourcesGridSize;
 	uvec2 base = v / sourcesGridSize;
@@ -136,11 +136,11 @@ inline RiverSource CalcRiverSource(ivec2 p)
 		return RiverSource(ivec2(source), 0.0);
 	}
 	float amount = float(rnd.w % 1511u) / 1024.0 + 0.3;
-	amount = amount * amount;
+	amount = amount * amount * amount;
 	return RiverSource(ivec2(source), amount);
 }
 
-inline void UpdateRainAndRiver(int x, int y)
+inline void RainAndRiverUpdate(int x, int y)
 {
 	int src = At(x, y);
 	float w = water[src];
@@ -233,7 +233,7 @@ inline float UpdateWaterLevel(Flux srcFlux, int neighs[4], float oldWater,
 	return oldWater;
 }
 
-inline void UpdateWaterLevelAndVelocity(int x, int y)
+inline void WaterLevelAndVelocityUpdate(int x, int y)
 {
 	int src = At(x, y);
 	NEIGHBOURS(neighs, x, y);
@@ -314,17 +314,8 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 		// depositing sediment
 		res = Kd * delta;
 	}
-	temp1[src] = res;
-}
-
-inline void ErosionAndDepositionUpdate(int x, int y)
-{
-	int src = At(x, y);
-	GroundLayers g = ground[src];
-	float sed = sediment[src];
-	float ds = temp1[src];
-	ground[src] = AddGeneralGround(g, -ds);
-	sediment[src] = sed + ds;
+	ground[src] = AddGeneralGround(g, -res);
+	sediment[src] = sed + res;
 }
 
 inline void SedimentTransportation(int x, int y)
@@ -440,14 +431,9 @@ inline float EvaporationRate(int x, int y)
 
 inline void Evaporation(int x, int y)
 {
-		int src = At(x, y);
-		temp1[src] = water[src] * (1 - EvaporationRate(x, y) * dt);
-}
-
-inline void EvaporationUpdate(int x, int y)
-{
-		int src = At(x, y);
-		water[src] = temp1[src];
+	int src = At(x, y);
+	float w = water[src];
+	water[src] = w * (1 - EvaporationRate(x, y) * dt);
 }
 
 // TODO: replace with selectional smoothing, to smooth only where slope
@@ -468,12 +454,6 @@ inline void SmoothUpdate(int x, int y)
 	int src = At(x, y);
 	float dh = temp1[src] - TotalGround(src);
 	ground[src].layers[0] += dh;
-}
-
-inline void ClearDelta(int x, int y)
-{
-	int src = At(x, y);
-	temp1[src] = 0;
 }
 
 #if GL_core_profile
