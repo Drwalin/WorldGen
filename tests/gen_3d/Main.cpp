@@ -229,6 +229,7 @@ int main(int argc, char **argv)
 			beg = now;
 			frames = 0;
 		}
+		
 		printf("\r    fps: %5.2f         (%6i) hydro: %7.2f ms  (%7.2f ms)     mat = %Lf                            ", fps, HYDRO_ITER,
 			   hydroErosionDuration, averageHydroIterationDuration, SUM_MATERIAL);
 		fflush(stdout);
@@ -564,7 +565,7 @@ void HydroErosionIteration()
 		}
 	}
 	
-	if (grid.useWater) {
+	if (grid.useWater && grid.useGpu == false) {
 		for (auto p : riverSources) {
 			int i = grid.At(p.x, p.y);
 			grid.water[i] += p.z * grid.dt;
@@ -614,6 +615,7 @@ void HydroErosionIteration()
 			}
 		}
 	}
+	
 	
 	grid.FullCycle();
 

@@ -33,7 +33,9 @@ struct Grid {
 	bool useSmoothing = false;
 	bool parallel = false;
 
-	constexpr static int OFF = 15;
+	constexpr static int ALIGNEMENT = 16;
+	constexpr static int PADDING = ALIGNEMENT - 1;
+	constexpr static int OFFSET = ALIGNEMENT - 1;
 
 	int iteration = 0;
 	
@@ -42,13 +44,16 @@ struct Grid {
 	~Grid();
 	
 	uint32_t elements;
+	uint32_t elementsStorage;
 
+	glm::vec4 *water_sediment_temp = nullptr;
+	
 	GroundLayers *ground = nullptr;
+	Velocity *velocity = nullptr;
+	Flux *flux = nullptr;
 	float *water = nullptr;
 	float *sediment = nullptr;
 	float *temp1 = nullptr;
-	Velocity *velocity = nullptr;
-	Flux *flux = nullptr;
 
 	float hardness[2] = {0.008, 0.02};
 // 	float hardness[2] = {0.01, 0.04};
@@ -157,11 +162,9 @@ struct Grid {
 		
 		
 		gl::VBO *vboGround = nullptr;
-		gl::VBO *vboWater = nullptr;
-		gl::VBO *vboSediment = nullptr;
-		gl::VBO *vboTemp1 = nullptr;
 		gl::VBO *vboVelocity = nullptr;
 		gl::VBO *vboFlux = nullptr;
+		gl::VBO *vboWaterSedimentTemp = nullptr;
 		
 		int width, height;
 		

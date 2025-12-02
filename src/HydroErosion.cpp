@@ -67,18 +67,29 @@ void Grid::CallSmoothing()
 	}
 }
 
-void Grid::Init(int width, int height, bool useGpu)
+void Grid::Init(int w, int h, bool useGpu)
 {
-	this->elements = width * height + 1;
+	width = w;
+	height = h;
+	if (w & (ALIGNEMENT-1) || h & (ALIGNEMENT-1)) {
+		printf("Grid width and height need to be multiple of %i\n", ALIGNEMENT);
+		fflush(stdout);
+		exit(1);
+	}
+	
+	elements = width * height + 1;
+	elementsStorage = elements + ALIGNEMENT;
 	this->useGpu = useGpu;
-	this->width = width;
-	this->height = height;
-	ground = new GroundLayers[elements + OFF] + OFF;
-	water = new float[elements + OFF] + OFF;
-	sediment = new float[elements + OFF] + OFF;
-	temp1 = new float[elements + OFF] + OFF;
-	velocity = new Velocity[elements + OFF] + OFF;
-	flux = new Flux[elements + OFF] + OFF;
+	
+	ground = new GroundLayers[elementsStorage] + OFFSET;
+	velocity = new Velocity[elementsStorage] + OFFSET;
+	flux = new Flux[elementsStorage] + OFFSET;
+	water_sediment_temp = new glm::vec4[elementsStorage];
+	
+	water = ((float*)water_sediment_temp) + OFFSET;
+	sediment = water + elementsStorage;
+	temp1 = sediment + elementsStorage;
+	
 	for (int i = 0; i < elements; ++i) {
 		water[i] = 0.0f;
 		sediment[i] = 0.0f;
@@ -112,22 +123,16 @@ Grid::Grid()
 Grid::~Grid()
 {
 	if (ground) {
-		delete[] (ground - OFF);
-	}
-	if (water) {
-		delete[] (water - OFF);
-	}
-	if (sediment) {
-		delete[] (sediment - OFF);
-	}
-	if (temp1) {
-		delete[] (temp1 - OFF);
+		delete[] (ground - OFFSET);
 	}
 	if (velocity) {
-		delete[] (velocity - OFF);
+		delete[] (velocity - OFFSET);
 	}
 	if (flux) {
-		delete[] (flux - OFF);
+		delete[] (flux - OFFSET);
+	}
+	if (water_sediment_temp) {
+		delete water_sediment_temp;
 	}
 }
 

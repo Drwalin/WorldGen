@@ -28,13 +28,6 @@ using namespace glm;
 using namespace glsl_noise;
 #endif
 
-layout(binding = 1) BUFFER(BufferBlock1, GroundLayers, ground);
-layout(binding = 2) BUFFER(BufferBlock2, float, water);
-layout(binding = 3) BUFFER(BufferBlock3, float, sediment);
-layout(binding = 4) BUFFER(BufferBlock4, float, temp1);
-layout(binding = 5) BUFFER(BufferBlock5, Velocity, velocity);
-layout(binding = 6) BUFFER(BufferBlock6, Flux, flux);
-
 static uniform float hardness[2] = {0.03, 0.07};
 static uniform float tangentOfAngleOfRecluse[2] = {1.7, 1};
 static uniform int width, height;
@@ -46,6 +39,31 @@ static uniform float Kd; // depositionConstant
 static uniform float Kc; // sedimentCapacityConstant
 static uniform float minimumSedimentCapacity;
 static uniform int iteration;
+
+layout(std430, binding = 1) BUFFER(BufferBlock1, GroundLayers, ground);
+layout(std430, binding = 2) BUFFER(BufferBlock2, Velocity, velocity);
+layout(std430, binding = 3) BUFFER(BufferBlock3, Flux, flux);
+
+#if GL_core_profile
+layout(std430, binding = 4) buffer BufferBlock7 {
+	float paddingWater[PADDING];
+	float water[ELEMENTS];
+	
+	float paddingSediment[PADDING];
+	float sediment[ELEMENTS];
+	
+	float paddingTemp1[PADDING];
+	float temp1[ELEMENTS];
+	
+// 	float paddingTemp2[PADDING];
+// 	float temp2[ELEMENTS];
+};
+#else
+static float *water = nullptr;
+static float *sediment = nullptr;
+static float *temp1 = nullptr;
+#endif
+
 #if GL_core_profile
 #else
 namespace _____holder
@@ -105,7 +123,7 @@ struct RiverSource {
 
 inline RiverSource CalcRiverSource(ivec2 p)
 {
-	const uint sourcesGridSize = 73u;
+	const uint sourcesGridSize = 97u;
 	uvec2 v = uvec2(p);
 	uvec2 md = v % sourcesGridSize;
 	uvec2 base = v / sourcesGridSize;

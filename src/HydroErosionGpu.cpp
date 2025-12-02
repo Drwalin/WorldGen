@@ -21,11 +21,9 @@ Grid::GPUCompute::~GPUCompute()
 	delete shaderUpdateHeightTexture;
 
 	delete vboGround;
-	delete vboWater;
-	delete vboSediment;
-	delete vboTemp1;
 	delete vboVelocity;
 	delete vboFlux;
+	delete vboWaterSedimentTemp;
 }
 
 static const char *prefix = R"(
@@ -65,26 +63,37 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 
 	vboGround = new gl::VBO(sizeof(ground[0]), gl::SHADER_STORAGE_BUFFER,
 							gl::DYNAMIC_DRAW);
-	vboWater = new gl::VBO(sizeof(water[0]), gl::SHADER_STORAGE_BUFFER,
-						   gl::DYNAMIC_DRAW);
-	vboSediment = new gl::VBO(sizeof(sediment[0]), gl::SHADER_STORAGE_BUFFER,
-							  gl::DYNAMIC_DRAW);
-	vboTemp1 = new gl::VBO(sizeof(temp1[0]), gl::SHADER_STORAGE_BUFFER,
-						   gl::DYNAMIC_DRAW);
 	vboVelocity = new gl::VBO(sizeof(velocity[0]), gl::SHADER_STORAGE_BUFFER,
 							  gl::DYNAMIC_DRAW);
 	vboFlux = new gl::VBO(sizeof(flux[0]), gl::SHADER_STORAGE_BUFFER,
 						  gl::DYNAMIC_DRAW);
+	vboWaterSedimentTemp = new gl::VBO(sizeof(water_sediment_temp[0]), gl::SHADER_STORAGE_BUFFER,
+						   gl::DYNAMIC_DRAW);
 
-	vboGround->Init(width * height + 1);
-	vboWater->Init(width * height + 1);
-	vboSediment->Init(width * height + 1);
-	vboTemp1->Init(width * height + 1);
-	vboVelocity->Init(width * height + 1);
-	vboFlux->Init(width * height + 1);
+	vboGround->Init(grid->elementsStorage);
+	vboVelocity->Init(grid->elementsStorage);
+	vboFlux->Init(grid->elementsStorage);
+	vboWaterSedimentTemp->Init(grid->elementsStorage);
+	
+	char globalMacrosVariableBySize[1024];
+	snprintf(globalMacrosVariableBySize, sizeof(globalMacrosVariableBySize),
+			"#define WIDTH %i\n"
+			"#define HEIGHT %i\n"
+			"#define ALIGNEMENT %i\n"
+			"#define PADDING %i\n"
+			"#define ELEMENTS %i\n"
+			"#define ELEMENTS_STORAGE %i\n",
+			width,
+			height,
+			ALIGNEMENT,
+			PADDING,
+			grid->elements,
+			grid->elementsStorage);
+			
 
 	const std::string baseCode =
 		std::string("#version 430 core\n\n") +
+		globalMacrosVariableBySize +
 		gl::Shader::LoadFileUseIncludes("../src/HydroErosionPure.h").c_str() +
 		"\n";
 
@@ -144,11 +153,9 @@ void main() {
 void Grid::GPUCompute::BindBuffers()
 {
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vboGround->GetIdGL());
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vboWater->GetIdGL());
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, vboSediment->GetIdGL());
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, vboTemp1->GetIdGL());
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, vboVelocity->GetIdGL());
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, vboFlux->GetIdGL());
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, vboVelocity->GetIdGL());
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, vboFlux->GetIdGL());
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, vboWaterSedimentTemp->GetIdGL());
 }
 
 void Grid::GPUCompute::SetUniforms(gl::Shader *shader)
@@ -247,30 +254,30 @@ void Grid::GPUCompute::UpdateHeightsTexture(gl::Texture *tex)
 void Grid::GPUCompute::UpdateGround(GroundLayers *data)
 {
 	gl::VBO *vbo = vboGround;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
-}
-void Grid::GPUCompute::UpdateWater(float *data)
-{
-	gl::VBO *vbo = vboWater;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
-}
-void Grid::GPUCompute::UpdateSediment(float *data)
-{
-	gl::VBO *vbo = vboSediment;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
-}
-void Grid::GPUCompute::UpdateTemp1(float *data)
-{
-	gl::VBO *vbo = vboTemp1;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
+	vbo->Update(data - PADDING, 0, grid->elementsStorage * vbo->VertexSize());
 }
 void Grid::GPUCompute::UpdateVelocity(Velocity *data)
 {
 	gl::VBO *vbo = vboVelocity;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
+	vbo->Update(data - PADDING, 0, vbo->GetVertexCount() * vbo->VertexSize());
 }
 void Grid::GPUCompute::UpdateFlux(Flux *data)
 {
 	gl::VBO *vbo = vboFlux;
-	vbo->Update(data, 0, vbo->GetVertexCount() * vbo->VertexSize());
+	vbo->Update(data - PADDING, 0, vbo->GetVertexCount() * vbo->VertexSize());
+}
+void Grid::GPUCompute::UpdateWater(float *data)
+{
+	gl::VBO *vbo = vboWaterSedimentTemp;
+	vbo->Update(data - PADDING, 0, grid->elementsStorage * sizeof(float));
+}
+void Grid::GPUCompute::UpdateSediment(float *data)
+{
+	gl::VBO *vbo = vboWaterSedimentTemp;
+	vbo->Update(data - PADDING, grid->elementsStorage * sizeof(float), grid->elementsStorage * sizeof(float));
+}
+void Grid::GPUCompute::UpdateTemp1(float *data)
+{
+	gl::VBO *vbo = vboWaterSedimentTemp;
+	vbo->Update(data - PADDING, 2ll * grid->elementsStorage * sizeof(float), grid->elementsStorage * sizeof(float));
 }
