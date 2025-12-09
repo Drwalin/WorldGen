@@ -28,6 +28,8 @@
 #ifndef C_GLSL_SHARED_CODE_H
 #endif
 
+#include "CGlslRandom.h"
+
 namespace glsl_noise
 {
 using namespace glm;
@@ -274,7 +276,6 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 	// 	p /= 2.0f;
 	// 	return RecCell(p, 14, 0.53, 1.7);
 	// 	return glsl_noise::cellular(p).x;
-	// 	glm::vec2 grad;
 	// 	return NoiseRidges(p / 15.0f);
 	// 	return glsl_noise::psrdnoise(p * 30.0f, {0.0f, 0.0f}, 0.0f, grad) * 0.5f
 	// + 0.5f; 	return Fbm(p, 8, 3.0/7.0, 2.3, false, false) * (0.4 + 0.6 *
@@ -298,6 +299,7 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 	} else {
 		h = plains + mountains;
 	}
+	h += (glsl_noise::RandomUint(glm::ivec3(glm::ivec2(p * 100000.0f), 0)).x%143212) / 43212702.0;
 	return h * 0.5f;
 }
 

@@ -14,6 +14,10 @@
 %:include <glm/mat2x2.hpp>
 %:include <glm/mat3x3.hpp>
 %:include <glm/mat4x4.hpp>
+using imat2 = glm::imat2x2;
+inline static int dot(glm::ivec2 a, glm::ivec2 b) {
+	return a.x * b.x + a.y * b.y;
+}
 #define layout(...)
 #define uniform
 #define IGNORE_UNUSED(VAR) (void)VAR;

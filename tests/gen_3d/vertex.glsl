@@ -36,7 +36,7 @@ void main()
 	int _x = gl_VertexID % meshSize.x;
 	int _z = gl_VertexID / meshSize.x;
 	
-	vec2 coord = vec2(_x, _z) / (meshSize-1);
+	vec2 coord = vec2(_x, _z) / (meshSize);
 	
 	vec2 meshScale = vec2(meshSize) / vec2(size);
 	
@@ -75,7 +75,7 @@ void main()
 	float x = int(pos.x * float(size.x));
 	float z = int(pos.y * float(size.y));
 	
-	pos = vec2(x, z) / size;
+	pos = (vec2(x, z) + 0.5) / size;
 	coord = pos;
 	
 	vec2 heights = texture(heightTex, coord).xy;

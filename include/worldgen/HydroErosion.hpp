@@ -12,10 +12,10 @@
 
 namespace gl
 {
-	class VBO;
-	class Shader;
-	class TExture;
-}
+class VBO;
+class Shader;
+class TExture;
+} // namespace gl
 
 /*
  * Angles of repose:
@@ -31,11 +31,11 @@ namespace gl
 struct Grid {
 	int parallelThreads = 1;
 	bool useGpu;
-	
+
 	bool useWater = true;
 	bool useThermalErosion = true;
-	bool useSmoothing = false;
-	
+	bool useSmoothing = true;
+
 	bool parallel = false;
 
 	constexpr static int ALIGNEMENT = 16;
@@ -43,16 +43,16 @@ struct Grid {
 	constexpr static int OFFSET = ALIGNEMENT - 1;
 
 	int iteration = 0;
-	
-	void Init(int width, int height, bool useGpu);
+
+	void Init(int width, int height, bool useGpu, int workGroupSizeDim=16);
 	Grid();
 	~Grid();
-	
+
 	uint32_t elements;
 	uint32_t elementsStorage;
 
 	glm::vec4 *water_sediment_temp = nullptr;
-	
+
 	GroundLayers *ground = nullptr;
 	Velocity *velocity = nullptr;
 	Flux *flux = nullptr;
@@ -61,15 +61,15 @@ struct Grid {
 	float *temp1 = nullptr;
 	float *temp2 = nullptr;
 
-	float hardness[2] = {0.008, 0.02};
-// 	float hardness[2] = {0.01, 0.04};
+	// float hardness[2] = {0.008, 0.02};
+	float hardness[2] = {0.01, 0.04};
 	// tan(30) ~= 0.577
 	// tan(34) ~= 0.675
 	// tan(45) ~= 1
 	// tan(60) ~= 1.732
 	// tan(75) ~= 3.732
-	static constexpr float tangentOfAngleOfRecluse[2] = {1, 0.675}; // 45* 34*
-	// static constexpr float tangentOfAngleOfRecluse[2] = {1.7f, 1.0f}; // 60* 45*
+	float tangentOfAngleOfRecluse[2] = {1, 0.675}; // 45* 34*
+	// float tangentOfAngleOfRecluse[2] = {1.7f, 1.0f}; // 60* 45*
 
 	int width, height;
 	float dt = 0.03;
@@ -115,36 +115,34 @@ struct Grid {
 	// to be executed after water increase
 	void FullCycle();
 	void UpdateHeightsTexture(gl::Texture *tex);
-	
+
 	struct StageData {
 		std::function<void()> functionCpu;
-		std::function<void(gl::Shader*)> functionGpu;
-		gl::Shader* shader = nullptr;
+		std::function<void(gl::Shader *)> functionGpu;
+		gl::Shader *shader = nullptr;
 		std::string functionName;
-		
-		~StageData() {
-			delete[] shader;
-		}
+
+		~StageData() { delete[] shader; }
 	};
 	std::vector<std::vector<StageData>> stages;
-	
+
 	struct GPUCompute {
 		~GPUCompute();
-		
+
 		gl::Shader *shaderUpdateHeightTexture;
 		int textureUniformLocation;
-		
+
 		void CallShader(gl::Shader *shader);
-		
+
 		void UpdateHeightsTexture(gl::Texture *tex);
-		
+
 		gl::VBO *vboGround = nullptr;
 		gl::VBO *vboVelocity = nullptr;
 		gl::VBO *vboFlux = nullptr;
 		gl::VBO *vboWaterSedimentTemp = nullptr;
-		
+
 		int width, height;
-		
+
 		void UpdateGround(GroundLayers *data);
 		void UpdateWater(float *data);
 		void UpdateSediment(float *data);
@@ -152,12 +150,12 @@ struct Grid {
 		void UpdateTemp2(float *data);
 		void UpdateVelocity(Velocity *data);
 		void UpdateFlux(Flux *data);
-		
+
 		void BindBuffers();
 		void SetUniforms(gl::Shader *shader);
-		
-		void Init(int w, int h, Grid *grid);
-		
+
+		void Init(int w, int h, Grid *grid, int workGroupSizeDim);
+
 		Grid *grid;
 	} gpu;
 };

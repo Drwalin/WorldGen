@@ -1,7 +1,7 @@
-#include <cassert>
-
 #include "../include/worldgen/HydroErosion.hpp"
+
 #include "HydroErosionPure.h"
+#include "../../OpenGLWrapper/include/openglwrapper/OpenGL.hpp"
 
 Grid::GPUCompute::~GPUCompute()
 {
@@ -13,26 +13,17 @@ Grid::GPUCompute::~GPUCompute()
 	delete vboWaterSedimentTemp;
 }
 
-static const char *prefix = R"(
-
-layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-void main() {
-	int x = int(gl_GlobalInvocationID.x);
-	int y = int(gl_GlobalInvocationID.y);
-	if (x >= width || y >= height) {
-		return;
-	}
-	)";
 static const char *postfix = R"((x, y);
 }
 )";
 
-void Grid::GPUCompute::Init(int w, int h, Grid *grid)
+void Grid::GPUCompute::Init(int w, int h, Grid *grid, int workGroupSizeDim)
 {
 	this->grid = grid;
 	this->width = w;
 	this->height = h;
 
+	
 	shaderUpdateHeightTexture = new gl::Shader();
 
 	vboGround = new gl::VBO(sizeof(ground[0]), gl::SHADER_STORAGE_BUFFER,
@@ -63,13 +54,24 @@ void Grid::GPUCompute::Init(int w, int h, Grid *grid)
 			PADDING,
 			grid->elements,
 			grid->elementsStorage);
-			
 
 	const std::string baseCode =
-		std::string("#version 430 core\n\n") +
+		std::string("#version 450 core\n\n") +
 		globalMacrosVariableBySize +
 		gl::Shader::LoadFileUseIncludes("../src/HydroErosionPure.h").c_str() +
 		"\n";
+	
+	char prefix[4096];
+	snprintf(prefix, sizeof(prefix)-1, R"(
+
+layout (local_size_x = %i, local_size_y = %i, local_size_z = 1) in;
+void main() {
+	int x = int(gl_GlobalInvocationID.x);
+	int y = int(gl_GlobalInvocationID.y);
+	if (x >= width || y >= height) {
+		return;
+	}
+	)", workGroupSizeDim, workGroupSizeDim);
 
 	for (auto &st : grid->stages) {
 		for (auto &it : st) {
@@ -148,6 +150,8 @@ void Grid::GPUCompute::SetUniforms(gl::Shader *shader)
 
 void Grid::GPUCompute::CallShader(gl::Shader *shader)
 {
+	gl::MemoryBarrier(gl::SHADER_STORAGE_BARRIER_BIT |
+					  gl::ATOMIC_COUNTER_BARRIER_BIT);
 	shader->Use();
 	SetUniforms(shader);
 	shader->DispatchRoundGroupNumbers(width, height, 1);

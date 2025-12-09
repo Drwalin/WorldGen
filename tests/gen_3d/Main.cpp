@@ -26,6 +26,8 @@ volatile bool gridInited = false;
 int width = 512 + 64;
 int height = width;
 int riverSourcesCount = 4;
+int WORK_GROUP_SIZE = 16;
+float SIMULATION_DELTA_TIME = 0.01;
 
 int gridOffsetX = 0, gridOffsetY = 0;
 
@@ -110,6 +112,8 @@ int main(int argc, char **argv)
 	noiseHorizontalScale = args.Float("scaleXZ", 1) * noiseHorizontalScale;
 	gridOffsetX = args.Int("gridOffsetX", 0);
 	gridOffsetY = args.Int("gridOffsetY", 0);
+	WORK_GROUP_SIZE = 1 << std::bit_width((uint32_t)args.Int("workGRoupSize", 8, 64, 16)-1);
+	SIMULATION_DELTA_TIME = args.Float("deltaTime", 0.000001, 0.5, 0.03);
 	
 	if (args.Bool("help")) {
 		args.PrintHelp();
@@ -130,8 +134,12 @@ int main(int argc, char **argv)
 	gl::VBO ebo(sizeof(uint32_t), gl::ELEMENT_ARRAY_BUFFER, gl::DYNAMIC_DRAW);
 	ebo.Init();
 	
-	vertHeights = new VertexHeights[width*height]({0.0f, 0.0f});
-	vertColors = new VertexColors[width*height]({0, 0, 0, 255});
+	vertHeights = new VertexHeights[width*height];
+	vertColors = new VertexColors[width*height];
+	for (int i=0; i<width*height; ++i) {
+		vertHeights[i] = {0, 0};
+		vertColors[i] = {0, 0, 0, 255};
+	}
 	
 	gl::Texture heightsTexture, colorsTexture;
 	
@@ -344,11 +352,9 @@ int main(int argc, char **argv)
 			glDepthMask(true);
 		}
 		
-		if (useGpu || !disableRender) {
-			gl::Flush();
-		}
+		gl::Flush();
 		if (useGpu == false || gridInited == false || disableRender) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(3));
+// 			std::this_thread::sleep_for(std::chrono::milliseconds(3));
 		}
 
 		if (!disableRender) {
@@ -436,8 +442,8 @@ void ThreadFunction()
 						simplex.Terrain(glm::vec2{p.x, p.y} * noiseHorizontalScale,
 										horizontalScale);
 
-					maxH = std::max(maxH, v.x);
-
+// 					v.x = (_x == 250 && _y == 250) ? 500 : 0;
+					
 					float h = v.x * 600.0f * generatorYScale;
 					glm::ivec3 c = ColorGradient(_x, _y);
 
@@ -456,6 +462,7 @@ void ThreadFunction()
 	int threadsCount =
 		std::max(((int)std::thread::hardware_concurrency()) - 2, 1);
 
+	auto beg = std::chrono::steady_clock::now();
 	for (int i = 1; i < threadsCount; ++i) {
 		threads.push_back(std::thread(threadCalcFunc));
 	}
@@ -465,11 +472,16 @@ void ThreadFunction()
 	for (auto &thread : threads) {
 		thread.join();
 	}
+	
+	auto end = std::chrono::steady_clock::now();
+	double sec = std::chrono::nanoseconds(end-beg).count() / 1'000'000'000.0;
+	
 	while (threadsDone.load() < threads.size() + 1) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(60));
 		
 	}
-	printf("\nMax height: %.3f     Done!\n", maxHeight.load());
+	printf("\nMax height: %.3f     Done!,      took: %.2f seconds\n",
+			maxHeight.load(), sec);
 	updateColorsTexture = true;
 
 	if (useGpu == false) {
@@ -487,7 +499,8 @@ void HydroErosionIteration()
 	if (HYDRO_ITER == 0) {
 		{
 			const auto a = std::chrono::steady_clock::now();
-			grid.Init(width, height, useGpu);
+			grid.Init(width, height, useGpu, WORK_GROUP_SIZE);
+			grid.dt = SIMULATION_DELTA_TIME;
 			const auto b = std::chrono::steady_clock::now();
 			float ms = std::chrono::nanoseconds(b - a).count() / 1'000'000.0;
 			printf("\nGrid init took: %10.6f ms       \n", ms);
@@ -531,7 +544,7 @@ void HydroErosionIteration()
 	
 	const auto a = std::chrono::steady_clock::now();
 	
-	if (HYDRO_ITER % 1000 == 0) {
+	if (HYDRO_ITER % 1000 == 0 && useGpu) {
 		for (int _y = 0; _y < height; ++_y) {
 			for (int _x = 0; _x < width; ++_x) {
 				const float x = _x;

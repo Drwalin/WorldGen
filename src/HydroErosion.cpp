@@ -1,5 +1,3 @@
-#include <cassert>
-
 #include <chrono>
 #include <vector>
 #include <thread>
@@ -7,32 +5,33 @@
 #include <functional>
 
 #include "../include/worldgen/HydroErosion.hpp"
+
 #include "HydroErosionPure.h"
 
-void Grid::Init(int w, int h, bool useGpu)
+void Grid::Init(int w, int h, bool useGpu, int workGroupSizeDim)
 {
 	width = w;
 	height = h;
-	if (w & (ALIGNEMENT-1) || h & (ALIGNEMENT-1)) {
+	if (w & (ALIGNEMENT - 1) || h & (ALIGNEMENT - 1)) {
 		printf("Grid width and height need to be multiple of %i\n", ALIGNEMENT);
 		fflush(stdout);
 		exit(1);
 	}
-	
+
 	elements = width * height + 1;
 	elementsStorage = elements + ALIGNEMENT;
 	this->useGpu = useGpu;
-	
+
 	ground = new GroundLayers[elementsStorage] + OFFSET;
 	velocity = new Velocity[elementsStorage] + OFFSET;
 	flux = new Flux[elementsStorage] + OFFSET;
 	water_sediment_temp = new glm::vec4[elementsStorage];
-	
-	water = ((float*)water_sediment_temp) + OFFSET;
+
+	water = ((float *)water_sediment_temp) + OFFSET;
 	sediment = water + elementsStorage * 1;
 	temp1 = water + elementsStorage * 2;
 	temp2 = water + elementsStorage * 3;
-	
+
 	for (int i = 0; i < elements; ++i) {
 		water[i] = 0.0f;
 		sediment[i] = 0.0f;
@@ -45,15 +44,11 @@ void Grid::Init(int w, int h, bool useGpu)
 		ground[i].layers[0] = 0;
 		ground[i].layers[1] = 0;
 	}
-	
-	
-	
-#define DEFINE_STAGE(NAME) StageData{ \
-	.functionCpu = [this]() { \
-		ForEachSafeBorders(HydroPure::NAME); \
-	}, \
-	.functionName = #NAME \
-}
+
+#define DEFINE_STAGE(NAME)                                                     \
+	StageData{                                                                 \
+		.functionCpu = [this]() { ForEachSafeBorders(HydroPure::NAME); },      \
+		.functionName = #NAME}
 	stages = {
 		{
 			DEFINE_STAGE(RainAndRiverUpdate),
@@ -72,23 +67,24 @@ void Grid::Init(int w, int h, bool useGpu)
 			DEFINE_STAGE(SmoothUpdate)
 		}
 	};
-	
+
 	if (useGpu) {
-		gpu.Init(width, height, this);
+		gpu.Init(width, height, this, workGroupSizeDim);
 	}
 }
 
 Grid::Grid()
 {
-	parallelThreads = std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
+	parallelThreads =
+		std::max(((int)std::thread::hardware_concurrency()) - 2, 0) / 2;
 	width = height = 0;
 	dt = 0.03;
 	crossSectionalAreaOfPipe = .6;
 	gravity = 9.81;
 	tileDimensionSize = 1;
 
-	depositionConstant = 0.03;
-	sedimentCapacityConstant = 0.01;
+	depositionConstant = 0.01;
+	sedimentCapacityConstant = 0.03;
 	minimumSedimentCapacity = 0.01;
 }
 
@@ -116,7 +112,8 @@ static std::function<void(int X)> jobWorker;
 
 template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 {
-	parallelThreads = std::clamp<int>(parallelThreads, 1, std::thread::hardware_concurrency());
+	parallelThreads = std::clamp<int>(parallelThreads, 1,
+									  std::thread::hardware_concurrency());
 	static std::function<void()> singleIteration = []() {
 		int X = jobId.fetch_add(1);
 		if (X < jobsTotal.load()) {
@@ -125,7 +122,7 @@ template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 		}
 	};
 	{
-		while (threads.size() < parallelThreads-1) {
+		while (threads.size() < parallelThreads - 1) {
 			threads.push_back(std::thread([]() {
 				while (true) {
 					if (jobId.load() < jobsTotal.load()) {
@@ -198,9 +195,9 @@ void Grid::FullCycle()
 	HydroPure::Kd = Kd;
 	HydroPure::Kc = Kc;
 	HydroPure::minimumSedimentCapacity = minimumSedimentCapacity;
-	
+
 	HydroPure::iteration = iteration;
-	
+
 	auto call = [this](std::vector<StageData> &stage) {
 		for (auto &data : stage) {
 			if (useGpu) {
@@ -220,10 +217,10 @@ void Grid::FullCycle()
 	if (useWater) {
 		call(stages[2]);
 	}
-	if (useSmoothing && iteration % 47 == 0) {
+	if (useSmoothing && iteration % 17747 == 3) {
 		call(stages[3]);
 	}
-	
+
 	++iteration;
 }
 
@@ -231,5 +228,3 @@ void Grid::UpdateHeightsTexture(gl::Texture *tex)
 {
 	gpu.UpdateHeightsTexture(tex);
 }
-
-#undef SAFE_COND_GRID
