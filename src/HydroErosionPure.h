@@ -131,21 +131,21 @@ struct RiverSource {
 
 inline RiverSource CalcRiverSource(ivec2 p)
 {
-	const uint sourcesGridSize = 191u;
+	const uint sourcesGridSize = 73u;
 	uvec2 v = uvec2(p);
 	uvec2 md = v % sourcesGridSize;
 	uvec2 base = v / sourcesGridSize;
 
-	uvec4 rnd = RandomUint(ivec3(int(base.x), int(base.y), 0));
+	uvec4 rnd = RandomUint(ivec3(int(base.x), int(base.y), 33432442));
 
 	uvec2 source = v - md + (uvec2(rnd.x, rnd.y) % sourcesGridSize);
 	if (rnd.z % 7 == 0) {
 		return RiverSource(ivec2(source), 0.0);
 	}
-	float amount = float(rnd.w % 1511u) / 1024.0;
-	amount = amount * amount * amount;
-	amount *= amount;
-	amount += 0.3;
+	float amount = float(rnd.w % 1511u) / 312.0;
+// 	amount = amount * amount * amount;
+// 	amount *= amount;
+	amount += 1.0;
 	return RiverSource(ivec2(source), amount);
 }
 
@@ -156,7 +156,8 @@ inline float CalcRain(int x, int y, int src)
 	// 	uvec4 rnd = RandomUint(ivec3(x, y, iteration));
 	// 	val = (rnd.x % 321381) / 321380.0;
 
-	val = (sin(iteration / 100.0) + 1.0) * 0.45;
+	val = sin(iteration / 5.0 * dt);
+	val = clamp(val, float(0.0), float(1.0));
 
 	/*
 	vec3 coord =
@@ -169,7 +170,7 @@ inline float CalcRain(int x, int y, int src)
 	val *= val;
 	val *= val;
 	val *= val;
-	val *= 0.01;
+	val *= 0.003;
 	return val;
 }
 
@@ -299,19 +300,31 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 		yl = l;
 	}
 
-	const float dhdx = (TotalGround(neighs[0]) - TotalGround(neighs[2])) / xl;
-	const float dhdy = (TotalGround(neighs[1]) - TotalGround(neighs[3])) / yl;
-	const float s = dhdx * dhdx + dhdy * dhdy;
-	return sqrt(s) / sqrt(1 + s);
+// 	const float dhdx = (TotalGround(neighs[0]) - TotalGround(neighs[2])) / xl;
+// 	const float dhdy = (TotalGround(neighs[1]) - TotalGround(neighs[3])) / yl;
+// 	const float s = dhdx * dhdx + dhdy * dhdy;
+// 	return sqrt(s) / sqrt(1 + s);
+	
+	const vec3 ax = vec3(xl, (TotalGround(neighs[0]) - TotalGround(neighs[2])), 0);
+	const vec3 ay = vec3(0, (TotalGround(neighs[1]) - TotalGround(neighs[3])), yl);
+	const vec3 cr = cross(ax, ay);
+	const float _dot = dot(cr, vec3(0,1,0));
+	const float _cos = _dot / length(cr);
+	return _cos;
 }
 
 inline float CalcSedimentCapacity(int src, int x, int y)
 {
 	Velocity vel = velocity[src];
-	const float sinusLocalTiltAngle = 0.7; // SinusLocalTiltAngle(src, x, y);
-	const float v = sqrt(vel.x * vel.x + vel.y * vel.y);
-	float capacity = Kc * ((0.01 + sinusLocalTiltAngle) * v) * water[src];
+	const float sinusLocalTiltAngle =
+	// 0.01 + 0.7;
+	SinusLocalTiltAngle(src, x, y);
+	float w = water[src];
+	const float v = 0.1 + sqrt(vel.x * vel.x + vel.y * vel.y);
+	float capacity = Kc * sinusLocalTiltAngle * v * w;
+// 	return clamp(capacity, minimumSedimentCapacity, float(100.0));
 	return clamp(capacity, minimumSedimentCapacity, float(1.0));
+// 	return clamp(capacity, minimumSedimentCapacity, w * Kc);
 }
 
 inline void ErosionAndDepositionCalculation(int x, int y)
@@ -326,7 +339,7 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 
 	if (capacity > sed) {
 		// picking up sediment
-		float f = hardness[1] * delta;
+		float f = hardness[1] * delta / dt;
 		float l1 = g.layers[1];
 		if (f > g.layers[1]) {
 			float f2 = (f - l1) * hardness[0] / hardness[1];
@@ -341,9 +354,29 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 	sediment[src] = sed + res;
 }
 
+#define R 2
+#define D (R * 2 + 1)
+
+inline vec2 VelocityDx(Velocity vel)
+{
+	const Velocity _v = vel;
+	const vec2 v1 = -vec2(_v.x, _v.y) * dt;
+	const float len = length(v1);
+	if (len > D) {
+		return v1 * (float(D) / len);
+	}
+	return v1;
+
+	/*
+	const Velocity _v = vel;
+	return -vec2(_v.x, _v.y) * dt;
+	*/
+}
+
 inline void SedimentTransportation(int x, int y)
 {
 	int src = At(x, y);
+	/*
 	NEIGHBOURS(neighs, x, y);
 	float tmp = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0, {
@@ -355,10 +388,88 @@ inline void SedimentTransportation(int x, int y)
 			tmp += dV;
 		}
 	})
-	float sed = sediment[src];
+	const float sed = sediment[src];
 	tmp = tmp + sed * (1.0 - dt);
 	temp1[src] = tmp;
+	*/
+
+	float _sed[D][D];
+	vec2 srcVel;
+	float deltaSed = 0.0;
+	for (int i = 0; i < D; ++i) {
+		for (int j = 0; j < D; ++j) {
+			int id = At(i + x - R, j + y - R);
+			if (id != 0) {
+				_sed[i][j] = sediment[id];
+				vec2 v = VelocityDx(velocity[id]);
+				if (i == j && j == R) {
+					srcVel = v;
+				}
+				vec2 _p = vec2(i, j) + v;
+				vec2 dist = abs(_p - vec2(R, R));
+				if (dist.x < 1.0 && dist.y < 1.0) {
+					dist = vec2(1, 1) - dist;
+					float fr = dist.x * dist.y;
+					deltaSed -= fr;
+				}
+			} else {
+				_sed[i][j] = 0;
+			}
+		}
+	}
+	deltaSed *= _sed[R][R];
+
+	{
+		const vec2 p = srcVel + vec2(R, R);
+		const ivec2 ip = ivec2(floor(p));
+		const vec2 f = p - vec2(ip);
+		
+		deltaSed += _sed[ip.x][ip.y] * (1 - f.x) * (1 - f.y);
+		deltaSed += _sed[ip.x + 1][ip.y] * (f.x) * (1 - f.y);
+		deltaSed += _sed[ip.x][ip.y + 1] * (1 - f.x) * (f.y);
+		deltaSed += _sed[ip.x + 1][ip.y + 1] * (f.x) * (f.y);
+	}
+
+	const float tmp = _sed[R][R] + deltaSed / 9.0;
+	temp1[src] = tmp;
+
+	/*
+	const vec2 srcVel = VelocityDx(velocity[src]);
+	float deltaSed = 0.0;
+	
+	const vec2 p = srcVel + vec2(x, y);
+	const ivec2 ip = ivec2(floor(p));
+	const vec2 f = p - vec2(ip);
+	
+	const ivec2 is[4] = {{0,0}, {1,0}, {0,1}, {1,1}};
+	for (int i=0; i<4; ++i) {
+		const ivec2 pi = is[i] + ip;//ivec2(x, y);
+		const int id = At(pi.x, pi.y);
+		if (id != 0) {
+			const float fx = is[i].x == 0 ? float(1) - f.x : f.x;
+			const float fy = is[i].y == 0 ? float(1) - f.y : f.y;
+			deltaSed += sediment[id] * fx * fy;
+		}
+	}
+	temp1[src] = (sediment[src] + deltaSed) * 0.5;
+	*/
+
+	/*
+	const int ids[4] = {
+		At(ip.x, ip.y),
+		At(ip.x+1, ip.y),
+		At(ip.x, ip.y+1),
+		At(ip.x+1, ip.y+1)};
+
+	if (ids[0] != 0) deltaSed += sediment[ids[0]] * (1 - f.x) * (1 - f.y);
+	if (ids[1] != 0) deltaSed += sediment[ids[1]] * (f.x) * (1 - f.y);
+	if (ids[2] != 0) deltaSed += sediment[ids[2]] * (1 - f.x) * (f.y);
+	if (ids[3] != 0) deltaSed += sediment[ids[3]] * (f.x) * (f.y);
+	temp1[src] = deltaSed;
+	*/
 }
+#undef R
+#undef D
 
 inline void SedimentTransportationUpdate(int x, int y)
 {
@@ -447,9 +558,27 @@ inline ivec2 mul(const ivec2 mat[2], ivec2 vec)
 
 inline int GetThermalRadius()
 {
+// 	if (iteration > 1000) {
+// 		return 0;
+// 	}
+	return 5;
+	
+	return ((iteration%300) < 25 || iteration < 10000) ? 5 : 0;
+	
+	if (iteration < 10000) {
+		return 5;
+	} else if (iteration < 1100 || (iteration % 2301 < 6)) {
+		return 10;
+	}
+	return 0;
+	
 	int TER = 4;
-	if (iteration < 400) {
-		TER = 30;
+	if (iteration < 100 || (iteration % 2301 < 6)) {
+		TER = 50;
+	} else if (iteration < 100) {
+		TER = 25;
+	} else if (iteration < 200) {
+		TER = 20;
 	} else if (iteration % 1000 == 7) {
 		TER = 15;
 	} else if (iteration % 133 == 23) {
@@ -458,6 +587,9 @@ inline int GetThermalRadius()
 		TER = 6;
 	} else if (iteration % 7 == 4) {
 		TER = 5;
+	}
+	if (TER < 50) {
+		return 0;
 	}
 	return TER;
 }
@@ -470,7 +602,7 @@ inline void ThermalErosionCalculation(int x, int y)
 	GroundLayers g = srcGround;
 
 	int TER = GetThermalRadius();
-	if (TER < 8) {
+	if (TER <= 0) {
 		return;
 	}
 
@@ -491,7 +623,11 @@ inline void ThermalErosionCalculation(int x, int y)
 		for (int _j = 1; _j <= TER; ++_j) {
 			ivec2 _pi = ivec2(_i, _j);
 			float dist = sqrt(_i * _i + _j * _j);
-			sum += dist * 4.0 * l;
+			if (dist + 1 >= TER) {
+				continue;
+			}
+			sum += 4;
+// 			sum += dist * 4.0 * l;
 			float t0 = dist * _t0;
 			float t1 = dist * _t1;
 			for (int k = 0; k < 4; ++k) {
@@ -537,8 +673,8 @@ inline void ThermalErosionCalculation(int x, int y)
 		}
 	}
 
-	sum = (TER * 2 + 1) * (TER * 2 + 1) - 1;
-	float tmp = delta * (1.0 / sum) * 0.5; // * dt;
+// 	sum = (TER * 2 + 1) * (TER * 2 + 1) - 1;
+	float tmp = delta * (1.0 / sum) * 0.5 * (iteration > 10000 ? 0.2 : 1.0); // * dt;
 	g = AddGeneralGround(srcGround, tmp);
 	velocity[src] = Velocity(g.layers[0], g.layers[1]);
 }
@@ -546,7 +682,7 @@ inline void ThermalErosionCalculation(int x, int y)
 inline void ThermalErosionUpdate(int x, int y)
 {
 	int TER = GetThermalRadius();
-	if (TER < 8) {
+	if (TER <= 0) {
 		return;
 	}
 
@@ -560,7 +696,7 @@ inline void ThermalErosionUpdate(int x, int y)
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.03 / 16.0; // Make it dependent on temperature in place (x,y)
+	return 0.03 / 64.0; // / 16.0; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)

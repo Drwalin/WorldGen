@@ -84,8 +84,8 @@ Grid::Grid()
 	tileDimensionSize = 1;
 
 	depositionConstant = 0.01;
-	sedimentCapacityConstant = 0.03;
-	minimumSedimentCapacity = 0.01;
+	sedimentCapacityConstant = 0.3;
+	minimumSedimentCapacity = 0.1;
 }
 
 Grid::~Grid()
@@ -100,7 +100,7 @@ Grid::~Grid()
 		delete[] (flux - OFFSET);
 	}
 	if (water_sediment_temp) {
-		delete water_sediment_temp;
+		delete[] water_sediment_temp;
 	}
 }
 

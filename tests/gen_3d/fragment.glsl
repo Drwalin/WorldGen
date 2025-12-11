@@ -72,6 +72,7 @@ void main()
 		}
 	}
 
+	float w = clamp(water, 0.0, 1.0);
 	if (useWater == 1) {
 		float w = clamp(water, 0.0, 1.0);
 		if (w < 0.25) {
@@ -80,11 +81,12 @@ void main()
 			w = sqrt(w);
 			w *= 0.1;
 		}
-		if (w < 0.05) {
-			discard;
-		}
 		FragColor = colorWater;//mix(FragColor, colorWater, w);
 		FragColor.w = 0.7;
+		if (w < 0.05) {
+			FragColor.w = mix(0, FragColor.w, w / 0.05);
+			discard;
+		}
 	} else {
 		float w = clamp(water, 0.0, 1.0);
 		w = sqrt(w);

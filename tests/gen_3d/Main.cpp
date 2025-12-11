@@ -103,6 +103,16 @@ int main(int argc, char **argv)
 	ArgumentParser args(argc, argv);
 	width = args.Int("width", 512+64, 16384, 512+64);
 	height = width;
+	
+	{
+		const auto a = std::chrono::steady_clock::now();
+		DefaultsSetup(false);
+		grid.Init(width, height, useGpu, WORK_GROUP_SIZE);
+		const auto b = std::chrono::steady_clock::now();
+		float ms = std::chrono::nanoseconds(b - a).count() / 1'000'000.0;
+		printf("\nGrid init took: %10.6f ms       \n", ms);
+	}
+	
 	generatorYScale = args.Float("scaleY", 0.001f, 100.0f, 1.0f);
 	SOFT_LAYER = args.Float("softLayerDepth", 0.0f, 1000.0f, 1.0f);
 	const int maxMeshSize = args.Int("meshSize", 64, 4096, 512);
@@ -113,7 +123,7 @@ int main(int argc, char **argv)
 	gridOffsetX = args.Int("gridOffsetX", 0);
 	gridOffsetY = args.Int("gridOffsetY", 0);
 	WORK_GROUP_SIZE = 1 << std::bit_width((uint32_t)args.Int("workGRoupSize", 8, 64, 16)-1);
-	SIMULATION_DELTA_TIME = args.Float("deltaTime", 0.000001, 0.5, 0.03);
+	grid.dt = args.Float("deltaTime", 0.000001, 0.5, 0.03);
 	
 	if (args.Bool("help")) {
 		args.PrintHelp();
@@ -122,8 +132,6 @@ int main(int argc, char **argv)
 	
 	const int meshWidth = width > maxMeshSize ? maxMeshSize : width;
 	const int meshHeight = height > maxMeshSize ? maxMeshSize : height;
-	
-	DefaultsSetup(false);
 
 	// Load shader
 	gl::Shader shader;
@@ -497,15 +505,6 @@ void HydroErosionIteration()
 	static wg::SimplexNoise simplex(432127);
 	
 	if (HYDRO_ITER == 0) {
-		{
-			const auto a = std::chrono::steady_clock::now();
-			grid.Init(width, height, useGpu, WORK_GROUP_SIZE);
-			grid.dt = SIMULATION_DELTA_TIME;
-			const auto b = std::chrono::steady_clock::now();
-			float ms = std::chrono::nanoseconds(b - a).count() / 1'000'000.0;
-			printf("\nGrid init took: %10.6f ms       \n", ms);
-		}
-
 		int maxHeight = 0;
 		wg::SimplexNoise simplex(13222);
 		for (int _y = 0; _y < height; ++_y) {
@@ -526,12 +525,7 @@ void HydroErosionIteration()
 		HYDRO_ITER = HYDRO_ITER + 1;
 		
 		if (useGpu) {
-			grid.gpu.UpdateGround(grid.ground);
-			grid.gpu.UpdateWater(grid.water);
-			grid.gpu.UpdateSediment(grid.sediment);
-			grid.gpu.UpdateTemp1(grid.temp1);
-			grid.gpu.UpdateVelocity(grid.velocity);
-			grid.gpu.UpdateFlux(grid.flux);
+			grid.gpu.UpdateAll();
 		}
 	}
 	
@@ -544,7 +538,7 @@ void HydroErosionIteration()
 	
 	const auto a = std::chrono::steady_clock::now();
 	
-	if (HYDRO_ITER % 1000 == 0 && useGpu) {
+	if (HYDRO_ITER % 1000 == 0 && useGpu == false) {
 		for (int _y = 0; _y < height; ++_y) {
 			for (int _x = 0; _x < width; ++_x) {
 				const float x = _x;

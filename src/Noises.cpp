@@ -283,12 +283,13 @@ float SimplexNoise::Terrain(glm::vec2 p, float verticalScale)
 	int octaves = 14;
 	bool useTwo = false;
 	float biome = Noise(seedrot[33] * -p * 0.2f * 2.0f - 321.f);
-	float scale = Noise(seedrot[34] * p * 0.4f + 123.f);
+	float scale = Noise(seedrot[34] * p * 0.4f + 123.f) * 0.5 + 0.5;
 	float mountains = (NoiseRidges(p / 2.0f) + RecCell(p, 14, 0.53, 1.7) * 3) *
 					  0.25 * (scale * 0.6 + 0.4);
 	// 		Fbm(p, octaves, 0.43, 2.3, false, useTwo) * (scale * 0.6 + 0.4);
-	float plains = Fbm(p * 0.3f - 100.0f, octaves, 0.5, 2.3, false, useTwo) *
+	float plains = Fbm(p * 0.3f * 0.3f - 100.0f, octaves, 0.5, 2.3, false, useTwo) *
 				   (scale * 0.8 + 0.2);
+	return (plains * 3.0 + mountains * (sin(sin(biome * M_PI * 0.5) * M_PI * 0.5))) * 0.2;
 	float h;
 	if (biome < 0.25) {
 		h = plains;
