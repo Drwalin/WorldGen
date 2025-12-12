@@ -33,8 +33,8 @@ struct Grid {
 	bool useGpu;
 
 	bool useWater = true;
-	bool useThermalErosion = true;
-	bool useSmoothing = true;
+	bool useThermalErosion = !true;
+	bool useSmoothing = !true;
 
 	bool parallel = false;
 
@@ -62,9 +62,9 @@ struct Grid {
 	float *temp2 = nullptr;
 
 	// float hardness[2] = {0.008, 0.02};
-	float hardness[2] = {0.01, 0.04};
+	// float hardness[2] = {0.01, 0.04};
 	// float hardness[2] = {0.04, 0.2};
-	// float hardness[2] = {0.1, 0.5};
+	float hardness[2] = {0.1, 0.5};
 	// float hardness[2] = {0.3, 0.8};
 	// tan(30) ~= 0.577
 	// tan(34) ~= 0.675

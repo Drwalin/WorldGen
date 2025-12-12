@@ -62,6 +62,10 @@ layout(std430, binding = 4) buffer BufferBlock73
 {
 	layout(offset = (PADDING * 3 + ELEMENTS * 2) * 4) float temp1[];
 };
+layout(std430, binding = 4) buffer BufferBlock73_2
+{
+	layout(offset = (PADDING * 3 + ELEMENTS * 2) * 4) int temp1_int[];
+};
 layout(std430, binding = 4) buffer BufferBlock74
 {
 	layout(offset = (PADDING * 4 + ELEMENTS * 3) * 4) float temp2[];
@@ -75,6 +79,7 @@ static float *water = nullptr;
 static float *sediment = nullptr;
 static int *sediment_int = nullptr;
 static float *temp1 = nullptr;
+static int *temp1_int = nullptr;
 static float *temp2 = nullptr;
 static int *temp2_int = nullptr;
 #endif
@@ -85,10 +90,11 @@ namespace _____holder
 {
 inline void _holder()
 {
-	(void)sediment_int;
-	(void)temp2_int;
 	(void)iteration;
+	(void)sediment_int;
+	(void)temp1_int;
 	(void)temp2;
+	(void)temp2_int;
 }
 } // namespace _____holder
 #endif
@@ -107,6 +113,13 @@ inline GroundLayers AddGeneralGround(GroundLayers g, float dv)
 		g.layers[1] = 0;
 	}
 	return g;
+}
+
+inline int AtClamp(int x, int y)
+{
+	x = clamp(x, 0, width-1);
+	y = clamp(y, 0, height-1);
+	return (x * height + y) + 1;
 }
 
 inline int At(int x, int y)
@@ -211,7 +224,6 @@ inline RiverSource CalcRiverSource(ivec2 p, uint gridSize, uint seed)
 // 	amount = amount * amount * amount;
 // 	amount *= amount;
 	amount += 1.0;
-	amount *= 0.0;
 	return RiverSource(ivec2(source), amount);
 }
 
@@ -219,8 +231,8 @@ inline float CalcRain(int x, int y, int src)
 {
 	ivec2 coord = ivec2(x, y);
 	RiverSource s = CalcRiverSource(coord, 17, iteration);
-	if (length(vec2(s.coord-coord)) < 4) {
-		return 0.01;
+	if (length(vec2(s.coord-coord)) < 5) {
+		return 0.0001;
 	}
 	return 0;
 	
@@ -358,8 +370,39 @@ inline void WaterLevelAndVelocityUpdate(int x, int y)
 	water[src] = newWater;
 }
 
-inline float SinusLocalTiltAngle(int t, int x, int y)
+inline vec3 Normal(int x, int y)
 {
+	const float halfSqrt2 = 0.70710678; // 0.7071067811865475244;
+	const float sqrt2 = 2.0 * halfSqrt2;
+	float h[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+	float g;
+	for (int i=0; i<3; ++i) {
+		for (int j=0; j<3; ++j) {
+			int n = AtClamp(i+x-1, j+y-1);
+			h[i][j] = TotalGround(n);
+		}
+	}
+
+	vec3 n1 = vec3(0, 0, 0);
+	g = h[1][1] - h[2][1]; n1 += normalize(vec3(g, l, 0));
+	g = h[0][1] - h[1][1]; n1 += normalize(vec3(g, l, 0));
+	g = h[1][1] - h[1][2]; n1 += normalize(vec3(0, l, g));
+	g = h[1][0] - h[1][1]; n1 += normalize(vec3(0, l, g));
+	n1 *= 0.15;
+
+	vec3 n2 = vec3(0, 0, 0);
+	g = h[0][0] - h[1][1]; n2 += normalize(vec3(+g, l*sqrt2, +g));
+	g = h[2][0] - h[1][1]; n2 += normalize(vec3(-g, l*sqrt2, +g));
+	g = h[0][2] - h[1][1]; n2 += normalize(vec3(+g, l*sqrt2, -g));
+	g = h[2][2] - h[1][1]; n2 += normalize(vec3(-g, l*sqrt2, -g));
+	n2 *= 0.1;
+
+	return n1 + n2;
+}
+
+inline vec3 NormalG(int x, int y)
+{
+	int t = At(x, y);
 	float xl = 2 * l, yl = 2 * l;
 	NEIGHBOURS(neighs, x, y);
 	if (neighs[0] == 0) {
@@ -381,11 +424,25 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 // 	const float dhdy = (TotalGround(neighs[1]) - TotalGround(neighs[3])) / yl;
 // 	const float s = dhdx * dhdx + dhdy * dhdy;
 // 	return sqrt(s) / sqrt(1 + s);
+
+// 	return (
+// 	normalize(vec3((TotalGround(neighs[0]) - TotalGround(neighs[2])), xl, 0)) +
+// 	normalize(vec3(0, yl, (TotalGround(neighs[1]) - TotalGround(neighs[3]))))
+// 	) * float(0.5);
 	
 	const vec3 ax = vec3(xl, (TotalGround(neighs[0]) - TotalGround(neighs[2])), 0);
 	const vec3 ay = vec3(0, (TotalGround(neighs[1]) - TotalGround(neighs[3])), yl);
-	const vec3 cr = cross(ax, ay);
-	const float _dot = dot(cr, vec3(0,1,0));
+	vec3 n = cross(ax, ay);
+// 	if (n.y < 0) {
+// 		n = -n;
+// 	}
+	return n;
+}
+
+inline float SinusLocalTiltAngle(int t, int x, int y)
+{
+	vec3 cr = NormalG(x, y);
+	const float _dot = cr.y; // dot(cr, vec3(0,1,0));
 	const float _cos = _dot / length(cr);
 	return _cos;
 }
@@ -394,8 +451,16 @@ inline float CalcSedimentCapacity(int src, int x, int y)
 {
 	Velocity vel = velocity[src];
 	const float sinusLocalTiltAngle =
-	// 0.01 + 0.7;
-	SinusLocalTiltAngle(src, x, y);
+		// 0.01 + 0.7;
+		SinusLocalTiltAngle(src, x, y);
+	if (
+			sinusLocalTiltAngle >= 0
+			&&
+			sinusLocalTiltAngle <= 1.01
+			) {
+	} else {
+		ground[src].layers[0] = -1000;
+	}
 	float w = clamp(water[src], float(0), float(1));
 	const float v = clamp(sqrt(vel.x * vel.x + vel.y * vel.y), minimumSedimentCapacity, float(10));
 	float capacity = Kc * sinusLocalTiltAngle * v * w;
@@ -429,8 +494,21 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 		// depositing sediment
 		res = Kd * delta;
 	}
-	ground[src] = AddGeneralGround(g, -res);
+	g = AddGeneralGround(g, -res);
 	sediment[src] = sed + res;
+	temp1[src] = g.layers[0];
+	temp2[src] = g.layers[1];
+}
+
+inline void ErosionAndDepositionUpdate(int x, int y)
+{
+	int src = At(x, y);
+	GroundLayers g;
+	g.layers[0] = temp1[src];
+	g.layers[1] = temp2[src];
+	ground[src] = g;
+	temp1[src] = 0;
+	temp2_int[src] = 0;
 }
 
 #define R 2
@@ -450,6 +528,9 @@ inline vec2 VelocityDx(Velocity vel)
 inline void SedimentTransportation(int x, int y)
 {
 	int src = At(x, y);
+
+
+	/*
 	NEIGHBOURS(neighs, x, y);
 	float tmp = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0, {
@@ -465,6 +546,8 @@ inline void SedimentTransportation(int x, int y)
 // 	tmp = tmp * dt + sed * (1.0 - dt);
 	tmp = sed + (tmp - sed) * dt;
 	temp1[src] = tmp;
+	return;
+	*/
 
 	
 	/*
@@ -604,14 +687,159 @@ inline void SedimentTransportation(int x, int y)
 	}
 	temp1[src] = deltaSed;
 	*/
+
+
+	if (false)
+	{
+		const Velocity v = velocity[src];
+		const vec2 srcVel = vec2(v.x, v.y) * dt;
+		float sed = sediment[src];
+
+		const vec2 p = srcVel + vec2(x, y);
+		const ivec2 ip = ivec2(floor(p));
+		const vec2 f = p - vec2(ip);
+
+		const int ids[4] = {
+			At(ip.x, ip.y),
+			At(ip.x+1, ip.y),
+			At(ip.x, ip.y+1),
+			At(ip.x+1, ip.y+1)};
+
+		const float factors[4] = {
+			(1 - f.x) * (1 - f.y),
+			(f.x) * (1 - f.y),
+			(1 - f.x) * (f.y),
+			(f.x) * (f.y)
+		};
+
+		for (int i = 0; i < 4; ++i) {
+			int id = ids[i];
+			float f = factors[i];
+			if (f >= 0 && f <= 1) {
+			} else {
+				ground[src].layers[0] = -10000.0;
+			}
+			if (id != 0) {
+				float ds = 0;
+				LOCK_LOOP(id,
+					{
+						float s = GetAtomicFloat(temp1_int[id]);
+						s += f * sed;
+						if (s < 0) {
+							ds = 0;
+							SetAtomicFloat(temp1_int[id], 0.0);
+						} else {
+							ds = s * f;
+							SetAtomicFloat(temp1_int[id], s - ds);
+						}
+					});
+			}
+		}
+		return;
+	}
+
+
+	const Velocity v = velocity[src];
+	const vec2 srcVel = -vec2(v.x, v.y) * dt;
+
+	const vec2 p = srcVel + vec2(x, y);
+	const ivec2 ip = ivec2(floor(p));
+	const vec2 f = p - vec2(ip);
+
+	const int ids[4] = {
+		At(ip.x, ip.y),
+		At(ip.x+1, ip.y),
+		At(ip.x, ip.y+1),
+		At(ip.x+1, ip.y+1)};
+	
+	const float factors[4] = {
+		(1 - f.x) * (1 - f.y),
+		(f.x) * (1 - f.y),
+		(1 - f.x) * (f.y),
+		(f.x) * (f.y)
+	};
+
+	for (int i = 0; i < 4; ++i) {
+		int id = ids[i];
+		float f = factors[i];
+		if (f >= 0 && f <= 1) {
+		} else {
+			ground[src].layers[0] = -10000.0;
+		}
+		if (id != 0) {
+			float ds = 0;
+			float othSed = sediment[id];
+			ds = othSed * f;
+			LOCK_LOOP(id,
+				{
+					float s = temp1[id];
+					s += ds;
+					temp1[id] = s;
+// 					float s = GetAtomicFloat(temp1_int[id]);
+// 					s += ds;
+// 					SetAtomicFloat(temp1_int[id], s);
+				});
+		}
+	}
 }
 #undef R
 #undef D
 
+inline void SedimentTransportation_Stage2(int x, int y)
+{
+	int src = At(x, y);
+	const Velocity v = velocity[src];
+	const vec2 srcVel = -vec2(v.x, v.y) * dt;
+	float deltaSed = 0.0;
+	const vec2 p = srcVel + vec2(x, y);
+	const ivec2 ip = ivec2(floor(p));
+	const vec2 f = p - vec2(ip);
+
+	const int ids[4] = {
+		At(ip.x, ip.y),
+		At(ip.x+1, ip.y),
+		At(ip.x, ip.y+1),
+		At(ip.x+1, ip.y+1)};
+	const float factors[4] = {
+		(1 - f.x) * (1 - f.y),
+		(f.x) * (1 - f.y),
+		(1 - f.x) * (f.y),
+		(f.x) * (f.y)
+	};
+
+	for (int i = 0; i < 4; ++i) {
+		int id = ids[i];
+		float f = factors[i];
+		if (f >= 0 && f <= 1) {
+		} else {
+			ground[src].layers[0] = -10000.0;
+		}
+		if (id != 0) {
+			float ds = 0;
+			float othSed = sediment[id];
+			ds = othSed * f;
+			float othSum = temp1[id];
+			
+			if (othSum > 0.0) {
+				deltaSed += ds / othSum;
+			}
+		}
+	}
+
+	float sedSrc = sediment[src];
+	float sedSrcSum = temp1[src];
+	if (sedSrcSum > 0.0) {
+		temp2[src] = deltaSed;
+	} else {
+		temp2[src] = sedSrc + deltaSed;
+	}
+}
+
 inline void SedimentTransportationUpdate(int x, int y)
 {
 	int src = At(x, y);
-	sediment[src] = temp1[src];
+	sediment[src] = temp2[src];
+// 	sediment[src] = temp1[src];
 // 	sediment[src] += temp1[src];
 }
 
@@ -701,7 +929,7 @@ inline int GetThermalRadius()
 // 	}
 // 	return 5;
 	
-	return ((iteration%300) < 25 || iteration < 10000) ? 5 : 0;
+	return ((iteration%10) == 0 || iteration < 10000) ? 5 : 0;
 	
 	if (iteration < 10000) {
 		return 5;
@@ -732,12 +960,21 @@ inline int GetThermalRadius()
 	return TER;
 }
 
+inline float ThermalErosionWaterFactorFunction(float a, float b)
+{
+	const float x = (a + b) / 10;
+	return 1.0 / (1.0 + x);
+// 	return 1.0 / (1.0 + x * x);
+// 	return 0.5 / (1.0 + x * x) + 0.5;
+}
+
 inline void ThermalErosionCalculation(int x, int y)
 {
 	int src = At(x, y);
 
 	GroundLayers srcGround = ground[src];
 	GroundLayers g = srcGround;
+	const float srcWater = water[src];
 
 	int TER = GetThermalRadius();
 	if (TER <= 0) {
@@ -776,6 +1013,8 @@ inline void ThermalErosionCalculation(int x, int y)
 				if (neigh == 0 || neigh == src) {
 					continue;
 				}
+				
+				const float nw = water[neigh];
 
 				g = ground[neigh];
 				float n0 = g.layers[0];
@@ -793,8 +1032,9 @@ inline void ThermalErosionCalculation(int x, int y)
 					SWAP(n1, h1);
 				}
 
+				float f = ThermalErosionWaterFactorFunction(srcWater, nw);
 				float hh0 = n0 + t0;
-				float hh1 = n1 + t1;
+				float hh1 = n1 + t1 * f;
 				float d = 0;
 				if (hh0 < hh1) {
 					hh0 = hh1;
@@ -812,7 +1052,7 @@ inline void ThermalErosionCalculation(int x, int y)
 	}
 
 // 	sum = (TER * 2 + 1) * (TER * 2 + 1) - 1;
-	float tmp = delta * (1.0 / sum) * 0.5 * (iteration > 10000 ? 0.2 : 1.0); // * dt;
+	float tmp = delta * (1.0 / sum) * 0.5;// * (iteration > 10000 ? 0.2 : 1.0); // * dt;
 	g = AddGeneralGround(srcGround, tmp);
 	velocity[src] = Velocity(g.layers[0], g.layers[1]);
 }
@@ -834,7 +1074,7 @@ inline void ThermalErosionUpdate(int x, int y)
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.03 / 32.0; // / 16.0; // Make it dependent on temperature in place (x,y)
+	return 0.03 / 16.0; // / 16.0; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)

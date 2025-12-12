@@ -55,7 +55,9 @@ void Grid::Init(int w, int h, bool useGpu, int workGroupSizeDim)
 			DEFINE_STAGE(CalcOutFlux),
 			DEFINE_STAGE(WaterLevelAndVelocityUpdate),
 			DEFINE_STAGE(ErosionAndDepositionCalculation),
+			DEFINE_STAGE(ErosionAndDepositionUpdate),
 			DEFINE_STAGE(SedimentTransportation),
+			DEFINE_STAGE(SedimentTransportation_Stage2),
 			DEFINE_STAGE(SedimentTransportationUpdate)
 		}, {
 			DEFINE_STAGE(ThermalErosionCalculation),
@@ -181,6 +183,7 @@ void Grid::FullCycle()
 	HydroPure::sediment = sediment;
 	HydroPure::sediment_int = (int *)sediment;
 	HydroPure::temp1 = temp1;
+	HydroPure::temp1_int = (int *)temp1;
 	HydroPure::temp2 = temp2;
 	HydroPure::temp2_int = (int *)temp2;
 
