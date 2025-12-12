@@ -22,6 +22,7 @@ using namespace glm;
 
 #if GL_core_profile
 #else
+%:include <atomic>
 namespace HydroPure
 {
 using namespace glm;
@@ -53,6 +54,10 @@ layout(std430, binding = 4) buffer BufferBlock72
 {
 	layout(offset = (PADDING * 2 + ELEMENTS * 1) * 4) float sediment[];
 };
+layout(std430, binding = 4) buffer BufferBlock72_2
+{
+	layout(offset = (PADDING * 2 + ELEMENTS * 1) * 4) int sediment_int[];
+};
 layout(std430, binding = 4) buffer BufferBlock73
 {
 	layout(offset = (PADDING * 3 + ELEMENTS * 2) * 4) float temp1[];
@@ -61,11 +66,17 @@ layout(std430, binding = 4) buffer BufferBlock74
 {
 	layout(offset = (PADDING * 4 + ELEMENTS * 3) * 4) float temp2[];
 };
+layout(std430, binding = 4) buffer BufferBlock74_2
+{
+	layout(offset = (PADDING * 4 + ELEMENTS * 3) * 4) int temp2_int[];
+};
 #else
 static float *water = nullptr;
 static float *sediment = nullptr;
+static int *sediment_int = nullptr;
 static float *temp1 = nullptr;
 static float *temp2 = nullptr;
+static int *temp2_int = nullptr;
 #endif
 
 #if GL_core_profile
@@ -74,6 +85,8 @@ namespace _____holder
 {
 inline void _holder()
 {
+	(void)sediment_int;
+	(void)temp2_int;
 	(void)iteration;
 	(void)temp2;
 }
@@ -124,19 +137,71 @@ inline int Neighbour(int x, int y, int dir)
 	return 0;
 }
 
+#if GL_core_profile
+#else
+inline int atomicCompSwap(int &mem, int cmp, int val)
+{
+	static_assert(sizeof(int) == sizeof(std::atomic<int>));
+	std::atomic<int> *atom = (std::atomic<int> *)&mem;
+	atom->compare_exchange_weak(cmp, val);
+	return cmp;
+}
+
+inline int atomicExchange(int &mem, int val)
+{
+	static_assert(sizeof(int) == sizeof(std::atomic<int>));
+	std::atomic<int> *atom = (std::atomic<int> *)&mem;
+	return atom->exchange(val);
+}
+
+inline float intBitsToFloat(int val)
+{
+	return *(float *)&val;
+}
+
+inline int floatBitsToInt(float val)
+{
+	return *(int *)&val;
+}
+#endif
+
+#define GetAtomicFloat(MEM) intBitsToFloat(atomicExchange(MEM, 0))
+#define SetAtomicFloat(MEM, VAL) atomicExchange(MEM, floatBitsToInt(VAL))
+
+// returns 1 when lock failed
+// returns 0 when lock acquired
+inline int TryLock(int id)
+{
+	int old = atomicCompSwap(temp2_int[id], 0, 1);
+	return old;
+}
+
+inline void Unlock(int id) { atomicExchange(temp2_int[id], 0); }
+
+#define LOCK_LOOP(ID, CODE)                                                    \
+	{                                                                          \
+		int lockAvailable = 0;                                                 \
+		do {                                                                   \
+			lockAvailable = TryLock(ID);                                       \
+			if (lockAvailable == 0) {                                          \
+				CODE Unlock(ID);                                               \
+			}                                                                  \
+		} while (lockAvailable != 0);                                          \
+	}
+
 struct RiverSource {
 	ivec2 coord;
 	float amount;
 };
 
-inline RiverSource CalcRiverSource(ivec2 p)
+inline RiverSource CalcRiverSource(ivec2 p, uint gridSize, uint seed)
 {
-	const uint sourcesGridSize = 73u;
+	const uint sourcesGridSize = gridSize;
 	uvec2 v = uvec2(p);
 	uvec2 md = v % sourcesGridSize;
 	uvec2 base = v / sourcesGridSize;
 
-	uvec4 rnd = RandomUint(ivec3(int(base.x), int(base.y), 33432442));
+	uvec4 rnd = RandomUint(ivec3(int(base.x), int(base.y), seed));
 
 	uvec2 source = v - md + (uvec2(rnd.x, rnd.y) % sourcesGridSize);
 	if (rnd.z % 7 == 0) {
@@ -146,11 +211,22 @@ inline RiverSource CalcRiverSource(ivec2 p)
 // 	amount = amount * amount * amount;
 // 	amount *= amount;
 	amount += 1.0;
+	amount *= 0.0;
 	return RiverSource(ivec2(source), amount);
 }
 
 inline float CalcRain(int x, int y, int src)
 {
+	ivec2 coord = ivec2(x, y);
+	RiverSource s = CalcRiverSource(coord, 17, iteration);
+	if (length(vec2(s.coord-coord)) < 4) {
+		return 0.01;
+	}
+	return 0;
+	
+	
+	
+	
 	float val;
 
 	// 	uvec4 rnd = RandomUint(ivec3(x, y, iteration));
@@ -170,7 +246,8 @@ inline float CalcRain(int x, int y, int src)
 	val *= val;
 	val *= val;
 	val *= val;
-	val *= 0.003;
+	val *= 0.002;
+	val *= 4.0;
 	return val;
 }
 
@@ -182,7 +259,7 @@ inline void RainAndRiverUpdate(int x, int y)
 	float rain = CalcRain(x, y, src);
 	float sources = 0.0;
 
-	RiverSource rs = CalcRiverSource(ivec2(x, y));
+	RiverSource rs = CalcRiverSource(ivec2(x, y), 73, 43124324);
 	ivec2 ap = (rs.coord - ivec2(x, y));
 	int dp = ap.x * ap.x + ap.y * ap.y;
 	if (dp <= 1) {
@@ -319,9 +396,10 @@ inline float CalcSedimentCapacity(int src, int x, int y)
 	const float sinusLocalTiltAngle =
 	// 0.01 + 0.7;
 	SinusLocalTiltAngle(src, x, y);
-	float w = water[src];
-	const float v = 0.1 + sqrt(vel.x * vel.x + vel.y * vel.y);
+	float w = clamp(water[src], float(0), float(1));
+	const float v = clamp(sqrt(vel.x * vel.x + vel.y * vel.y), minimumSedimentCapacity, float(10));
 	float capacity = Kc * sinusLocalTiltAngle * v * w;
+	return capacity;
 // 	return clamp(capacity, minimumSedimentCapacity, float(100.0));
 	return clamp(capacity, minimumSedimentCapacity, float(1.0));
 // 	return clamp(capacity, minimumSedimentCapacity, w * Kc);
@@ -332,6 +410,7 @@ inline void ErosionAndDepositionCalculation(int x, int y)
 	int src = At(x, y);
 	float capacity = CalcSedimentCapacity(src, x, y);
 	float sed = sediment[src];
+	temp2_int[src] = 0;
 
 	const float delta = (capacity - sed) * dt;
 	float res = 0;
@@ -366,17 +445,11 @@ inline vec2 VelocityDx(Velocity vel)
 		return v1 * (float(D) / len);
 	}
 	return v1;
-
-	/*
-	const Velocity _v = vel;
-	return -vec2(_v.x, _v.y) * dt;
-	*/
 }
 
 inline void SedimentTransportation(int x, int y)
 {
 	int src = At(x, y);
-	/*
 	NEIGHBOURS(neighs, x, y);
 	float tmp = 0;
 	FOR_EACH_DIR_COND(neighs[DIR] != 0, {
@@ -384,15 +457,17 @@ inline void SedimentTransportation(int x, int y)
 		if (sum > 0) {
 			const float neighSed = sediment[neighs[DIR]];
 			const float incomingFlux = flux[neighs[DIR]].f[R_DIR];
-			const float dV = dt * neighSed * incomingFlux / sum;
+			const float dV = neighSed * incomingFlux / sum;
 			tmp += dV;
 		}
 	})
 	const float sed = sediment[src];
-	tmp = tmp + sed * (1.0 - dt);
+// 	tmp = tmp * dt + sed * (1.0 - dt);
+	tmp = sed + (tmp - sed) * dt;
 	temp1[src] = tmp;
-	*/
 
+	
+	/*
 	float _sed[D][D];
 	vec2 srcVel;
 	float deltaSed = 0.0;
@@ -432,9 +507,13 @@ inline void SedimentTransportation(int x, int y)
 
 	const float tmp = _sed[R][R] + deltaSed / 9.0;
 	temp1[src] = tmp;
+	*/
 
+	
+	
 	/*
-	const vec2 srcVel = VelocityDx(velocity[src]);
+	const Velocity v = velocity[src];
+	const vec2 srcVel = -vec2(v.x, v.y) * dt;
 	float deltaSed = 0.0;
 	
 	const vec2 p = srcVel + vec2(x, y);
@@ -453,8 +532,17 @@ inline void SedimentTransportation(int x, int y)
 	}
 	temp1[src] = (sediment[src] + deltaSed) * 0.5;
 	*/
+	
 
 	/*
+	const Velocity v = velocity[src];
+	const vec2 srcVel = -vec2(v.x, v.y) * dt;
+	float deltaSed = 0.0;
+	
+	const vec2 p = srcVel + vec2(x, y);
+	const ivec2 ip = ivec2(floor(p));
+	const vec2 f = p - vec2(ip);
+
 	const int ids[4] = {
 		At(ip.x, ip.y),
 		At(ip.x+1, ip.y),
@@ -467,6 +555,55 @@ inline void SedimentTransportation(int x, int y)
 	if (ids[3] != 0) deltaSed += sediment[ids[3]] * (f.x) * (f.y);
 	temp1[src] = deltaSed;
 	*/
+
+
+	/*
+	const Velocity v = velocity[src];
+	const vec2 srcVel = -vec2(v.x, v.y) * dt;
+	float deltaSed = 0.0;
+	
+	const vec2 p = srcVel + vec2(x, y);
+	const ivec2 ip = ivec2(floor(p));
+	const vec2 f = p - vec2(ip);
+
+	const int ids[4] = {
+		At(ip.x, ip.y),
+		At(ip.x+1, ip.y),
+		At(ip.x, ip.y+1),
+		At(ip.x+1, ip.y+1)};
+	
+	const float factors[4] = {
+		(1 - f.x) * (1 - f.y),
+		(f.x) * (1 - f.y),
+		(1 - f.x) * (f.y),
+		(f.x) * (f.y)
+	};
+
+	for (int i = 0; i < 4; ++i) {
+		int id = ids[i];
+		float f = factors[i];
+		if (f >= 0 && f <= 1) {
+		} else {
+			ground[src].layers[0] = -10000.0;
+		}
+		if (id != 0) {
+			float ds = 0;
+			LOCK_LOOP(id,
+				{
+					float s = GetAtomicFloat(sediment_int[id]);
+					if (s < 0) {
+						ds = 0;
+						SetAtomicFloat(sediment_int[id], 0.0);
+					} else {
+						ds = s * f;
+						SetAtomicFloat(sediment_int[id], s - ds);
+					}
+				});
+			deltaSed += ds;
+		}
+	}
+	temp1[src] = deltaSed;
+	*/
 }
 #undef R
 #undef D
@@ -475,6 +612,7 @@ inline void SedimentTransportationUpdate(int x, int y)
 {
 	int src = At(x, y);
 	sediment[src] = temp1[src];
+// 	sediment[src] += temp1[src];
 }
 
 /*
@@ -561,7 +699,7 @@ inline int GetThermalRadius()
 // 	if (iteration > 1000) {
 // 		return 0;
 // 	}
-	return 5;
+// 	return 5;
 	
 	return ((iteration%300) < 25 || iteration < 10000) ? 5 : 0;
 	
@@ -696,7 +834,7 @@ inline void ThermalErosionUpdate(int x, int y)
 
 inline float EvaporationRate(int x, int y)
 {
-	return 0.03 / 64.0; // / 16.0; // Make it dependent on temperature in place (x,y)
+	return 0.03 / 32.0; // / 16.0; // Make it dependent on temperature in place (x,y)
 }
 
 inline void Evaporation(int x, int y)

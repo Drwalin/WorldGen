@@ -85,7 +85,7 @@ Grid::Grid()
 
 	depositionConstant = 0.01;
 	sedimentCapacityConstant = 0.3;
-	minimumSedimentCapacity = 0.1;
+	minimumSedimentCapacity = 0.01;
 }
 
 Grid::~Grid()
@@ -174,13 +174,15 @@ template <typename TFunc> inline void Grid::ForEachSafeBorders(TFunc &&func)
 
 void Grid::FullCycle()
 {
-	HydroPure::water = water;
 	HydroPure::ground = ground;
+	HydroPure::flux = flux;
+	HydroPure::velocity = velocity;
+	HydroPure::water = water;
 	HydroPure::sediment = sediment;
+	HydroPure::sediment_int = (int *)sediment;
 	HydroPure::temp1 = temp1;
 	HydroPure::temp2 = temp2;
-	HydroPure::velocity = velocity;
-	HydroPure::flux = flux;
+	HydroPure::temp2_int = (int *)temp2;
 
 	HydroPure::hardness[0] = hardness[0];
 	HydroPure::hardness[1] = hardness[1];
