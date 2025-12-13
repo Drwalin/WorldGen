@@ -433,15 +433,15 @@ inline vec3 NormalG(int x, int y)
 	const vec3 ax = vec3(xl, (TotalGround(neighs[0]) - TotalGround(neighs[2])), 0);
 	const vec3 ay = vec3(0, (TotalGround(neighs[1]) - TotalGround(neighs[3])), yl);
 	vec3 n = cross(ax, ay);
-// 	if (n.y < 0) {
-// 		n = -n;
-// 	}
+	if (n.y < 0) {
+		n = -n;
+	}
 	return n;
 }
 
 inline float SinusLocalTiltAngle(int t, int x, int y)
 {
-	vec3 cr = NormalG(x, y);
+	vec3 cr = Normal(x, y);
 	const float _dot = cr.y; // dot(cr, vec3(0,1,0));
 	const float _cos = _dot / length(cr);
 	return _cos;
@@ -450,19 +450,25 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 inline float CalcSedimentCapacity(int src, int x, int y)
 {
 	Velocity vel = velocity[src];
-	const float sinusLocalTiltAngle =
-		// 0.01 + 0.7;
-		SinusLocalTiltAngle(src, x, y);
+	float sinusLocalTiltAngle =
+// 		clamp(
+				SinusLocalTiltAngle(src, x, y)
+// 				, float(0), float(1))
+		;
 	if (
 			sinusLocalTiltAngle >= 0
-			&&
-			sinusLocalTiltAngle <= 1.01
+// 			&&
+// 			sinusLocalTiltAngle <= 1.01
 			) {
 	} else {
 		ground[src].layers[0] = -1000;
 	}
 	float w = clamp(water[src], float(0), float(1));
-	const float v = clamp(sqrt(vel.x * vel.x + vel.y * vel.y), minimumSedimentCapacity, float(10));
+	const float v =
+	//	clamp(
+			sqrt(vel.x * vel.x + vel.y * vel.y)
+	//		, minimumSedimentCapacity, float(10))
+		;
 	float capacity = Kc * sinusLocalTiltAngle * v * w;
 	return capacity;
 // 	return clamp(capacity, minimumSedimentCapacity, float(100.0));
@@ -689,6 +695,7 @@ inline void SedimentTransportation(int x, int y)
 	*/
 
 
+	/*
 	if (false)
 	{
 		const Velocity v = velocity[src];
@@ -737,11 +744,12 @@ inline void SedimentTransportation(int x, int y)
 		}
 		return;
 	}
+	*/
+
 
 
 	const Velocity v = velocity[src];
 	const vec2 srcVel = -vec2(v.x, v.y) * dt;
-
 	const vec2 p = srcVel + vec2(x, y);
 	const ivec2 ip = ivec2(floor(p));
 	const vec2 f = p - vec2(ip);
@@ -751,7 +759,6 @@ inline void SedimentTransportation(int x, int y)
 		At(ip.x+1, ip.y),
 		At(ip.x, ip.y+1),
 		At(ip.x+1, ip.y+1)};
-	
 	const float factors[4] = {
 		(1 - f.x) * (1 - f.y),
 		(f.x) * (1 - f.y),
@@ -762,22 +769,18 @@ inline void SedimentTransportation(int x, int y)
 	for (int i = 0; i < 4; ++i) {
 		int id = ids[i];
 		float f = factors[i];
-		if (f >= 0 && f <= 1) {
-		} else {
-			ground[src].layers[0] = -10000.0;
-		}
 		if (id != 0) {
 			float ds = 0;
 			float othSed = sediment[id];
 			ds = othSed * f;
 			LOCK_LOOP(id,
 				{
-					float s = temp1[id];
-					s += ds;
-					temp1[id] = s;
-// 					float s = GetAtomicFloat(temp1_int[id]);
+// 					float s = temp1[id];
 // 					s += ds;
-// 					SetAtomicFloat(temp1_int[id], s);
+// 					temp1[id] = s;
+					float s = GetAtomicFloat(temp1_int[id]);
+					s += ds;
+					SetAtomicFloat(temp1_int[id], s);
 				});
 		}
 	}
@@ -810,10 +813,6 @@ inline void SedimentTransportation_Stage2(int x, int y)
 	for (int i = 0; i < 4; ++i) {
 		int id = ids[i];
 		float f = factors[i];
-		if (f >= 0 && f <= 1) {
-		} else {
-			ground[src].layers[0] = -10000.0;
-		}
 		if (id != 0) {
 			float ds = 0;
 			float othSed = sediment[id];
@@ -821,7 +820,7 @@ inline void SedimentTransportation_Stage2(int x, int y)
 			float othSum = temp1[id];
 			
 			if (othSum > 0.0) {
-				deltaSed += ds / othSum;
+				deltaSed += ds / (othSum > othSed ? othSum : 1.0);
 			}
 		}
 	}

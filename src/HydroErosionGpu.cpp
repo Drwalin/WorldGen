@@ -104,6 +104,15 @@ void main() {
 	float w = water[id];
 	float sed = sediment[id];
 	vec2 h = vec2(g.layers[0] + g.layers[1] + sed, w);
+// 	h.x = CalcSedimentCapacity(id, x, y) * 100.0;
+// 	h.x = sed;
+// 	if (x == 0) {
+// 		h.x = y;
+// 	} else {
+// 		if (h.x < 0) {
+// 			h.x *= 100.0;
+// 		}
+// 	}
 	
 	imageStore(heightsTex, ivec2(x, y), vec4(h, 0, 0));
 }
