@@ -95,6 +95,7 @@ inline void _holder()
 	(void)temp1_int;
 	(void)temp2;
 	(void)temp2_int;
+	(void)minimumSedimentCapacity;
 }
 } // namespace _____holder
 #endif
@@ -450,29 +451,13 @@ inline float SinusLocalTiltAngle(int t, int x, int y)
 inline float CalcSedimentCapacity(int src, int x, int y)
 {
 	Velocity vel = velocity[src];
-	float sinusLocalTiltAngle =
-// 		clamp(
-				SinusLocalTiltAngle(src, x, y)
-// 				, float(0), float(1))
-		;
-	if (
-			sinusLocalTiltAngle >= 0
-// 			&&
-// 			sinusLocalTiltAngle <= 1.01
-			) {
-	} else {
-		ground[src].layers[0] = -1000;
-	}
-	float w = clamp(water[src], float(0), float(1));
-	const float v =
-	//	clamp(
-			sqrt(vel.x * vel.x + vel.y * vel.y)
-	//		, minimumSedimentCapacity, float(10))
-		;
+	float sinusLocalTiltAngle = SinusLocalTiltAngle(src, x, y);
+	float w = water[src];
+	const float v = sqrt(vel.x * vel.x + vel.y * vel.y);
 	float capacity = Kc * sinusLocalTiltAngle * v * w;
 	return capacity;
 // 	return clamp(capacity, minimumSedimentCapacity, float(100.0));
-	return clamp(capacity, minimumSedimentCapacity, float(1.0));
+// 	return clamp(capacity, minimumSedimentCapacity, float(1.0));
 // 	return clamp(capacity, minimumSedimentCapacity, w * Kc);
 }
 
@@ -772,7 +757,7 @@ inline void SedimentTransportation(int x, int y)
 		if (id != 0) {
 			float ds = 0;
 			float othSed = sediment[id];
-			ds = othSed * f;
+			ds = othSed * f * 0.1;
 			LOCK_LOOP(id,
 				{
 // 					float s = temp1[id];
@@ -816,9 +801,9 @@ inline void SedimentTransportation_Stage2(int x, int y)
 		if (id != 0) {
 			float ds = 0;
 			float othSed = sediment[id];
-			ds = othSed * f;
+			ds = othSed * f * 0.1;
 			float othSum = temp1[id];
-			
+
 			if (othSum > 0.0) {
 				deltaSed += ds / (othSum > othSed ? othSum : 1.0);
 			}
@@ -827,11 +812,12 @@ inline void SedimentTransportation_Stage2(int x, int y)
 
 	float sedSrc = sediment[src];
 	float sedSrcSum = temp1[src];
-	if (sedSrcSum > 0.0) {
-		temp2[src] = deltaSed;
-	} else {
-		temp2[src] = sedSrc + deltaSed;
+	
+	if (sedSrcSum > sedSrc) {
+		sedSrcSum = sedSrc;
 	}
+	
+	temp2[src] = deltaSed + sedSrc - sedSrcSum;
 }
 
 inline void SedimentTransportationUpdate(int x, int y)
